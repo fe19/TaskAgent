@@ -1,0 +1,69 @@
+import { showError, clearError } from './ui.js';
+import { state } from './store.js';
+import { get } from './api-client.js';
+import { connectStream } from './live-stream.js';
+import { startClock } from './clock.js';
+import * as actions from './actions.js';
+import * as settingsView from './views/settings.js';
+import * as permissionsView from './views/permissions.js';
+import * as taskForm from './views/task-form.js';
+import * as dispatchView from './views/dispatch.js';
+import * as board from './views/board.js';
+import * as runDialog from './views/run-dialog.js';
+import * as sidebar from './views/sidebar.js';
+import * as resources from './views/resources.js';
+import * as quota from './views/quota.js';
+import * as dragDrop from './views/drag-drop.js';
+
+// Poll if SSE silently dies.
+const POLL_MS = 10000;
+
+const VIEWS = [sidebar, settingsView, permissionsView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions];
+
+async function reloadSettings() {
+  const { settings, spec, permissions } = await get('/api/settings');
+  Object.assign(state, { settings, spec, permissionMeta: permissions });
+  settingsView.render();
+  permissionsView.render();
+  dispatchView.render();
+  // The price per AIC converts the quota to dollars.
+  quota.render();
+  // Queued tiles show the current model.
+  board.render();
+}
+
+async function refresh() {
+  const [agents, tasks] = await Promise.all([get('/api/agents'), get('/api/tasks')]);
+  state.agents = agents.agents;
+  state.tasks = tasks.tasks;
+  // Agents include settings updates from other tabs.
+  if (agents.settings) state.settings = agents.settings;
+  state.loaded = true;
+
+  board.render();
+  board.renderStats();
+  dispatchView.render();
+  await runDialog.refresh();
+}
+
+async function boot() {
+  const context = { refresh, reloadSettings };
+  for (const view of VIEWS) view.mount(context);
+
+  try {
+    await reloadSettings();
+    await refresh();
+    clearError();
+  } catch (err) {
+    showError(`Could not reach the server: ${err.message}`);
+    state.loaded = true;
+    board.render();
+    board.renderStats();
+  }
+
+  startClock();
+  connectStream(() => refresh().catch((err) => showError(err.message)));
+  setInterval(() => refresh().catch(() => {}), POLL_MS);
+}
+
+boot();

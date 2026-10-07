@@ -1,0 +1,15 @@
+{
+  "name": "agents-tasks",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Configure, queue and monitor GitHub Copilot CLI agents from a local web UI.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "verify:ui": "node scripts/verify-ui.mjs"
+  }
+}

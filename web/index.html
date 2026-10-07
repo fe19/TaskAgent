@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agents Tasks</title>
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <link rel="stylesheet" href="/styles/layout.css" />
+    <link rel="stylesheet" href="/styles/status.css" />
+    <link rel="stylesheet" href="/styles/forms.css" />
+    <link rel="stylesheet" href="/styles/buttons.css" />
+    <link rel="stylesheet" href="/styles/board.css" />
+    <link rel="stylesheet" href="/styles/dialog.css" />
+    <link rel="stylesheet" href="/styles/permissions.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">AT</span>
+        <div>
+          <h1>Agents Tasks</h1>
+          <p class="brand-sub">GitHub Copilot CLI agents · local</p>
+        </div>
+      </div>
+      <div class="topbar-stats">
+        <div class="stat-group" id="usage-group" title="Usage reported by the runs on the board">
+          <div class="stat">
+            <span class="stat-value" id="stat-tokens">–</span>
+            <span class="stat-label">tokens used</span>
+          </div>
+          <div class="stat" title="GitHub Copilot AI Credits used by these runs">
+            <span class="stat-value" id="stat-aic">–</span>
+            <span class="stat-label">AIC used</span>
+          </div>
+          <div class="stat" title="AIC × price per AIC (Agent configuration)">
+            <span class="stat-value" id="stat-usd">–</span>
+            <span class="stat-label">cost</span>
+          </div>
+          <div class="stat quota-stat" id="quota-stat" title="Remaining monthly GitHub Copilot allowance">
+            <span class="stat-value" id="stat-left">–</span>
+            <span class="stat-label">left</span>
+          </div>
+          <div class="stat quota-stat" title="Remaining monthly GitHub Copilot allowance">
+            <span class="stat-value" id="stat-left-pct">–</span>
+            <span class="stat-label">left</span>
+          </div>
+        </div>
+        <div class="stat-group" id="hw-group" title="Hardware used by the running agents">
+          <div class="stat">
+            <span class="stat-value" id="stat-cpu">–</span>
+            <span class="stat-label">agent CPU</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="stat-ram">–</span>
+            <span class="stat-label">agent RAM</span>
+          </div>
+        </div>
+        <div class="conn" id="conn" data-state="connecting">
+          <span class="conn-dot"></span><span id="conn-label">connecting</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="error-banner" class="banner" hidden role="alert">
+      <span id="error-text"></span>
+      <button type="button" class="banner-close" id="error-dismiss" aria-label="Dismiss">×</button>
+    </div>
+
+    <main class="layout">
+      <aside class="column sidebar" id="sidebar">
+        <button type="button" class="sidebar-toggle sidebar-rail" data-sidebar-toggle aria-controls="sidebar"
+                aria-expanded="false" title="Show configuration">
+          <span class="toggle-arrow">&raquo;</span>
+          <span class="rail-label">Configuration &amp; permissions</span>
+        </button>
+        <div class="sidebar-rail sidebar-filler" data-sidebar-toggle aria-hidden="true"></div>
+        <section class="card" aria-labelledby="cfg-h">
+          <div class="card-head">
+            <h2 id="cfg-h">Agent configuration</h2>
+            <button type="button" class="sidebar-toggle" data-sidebar-toggle aria-controls="sidebar"
+                    aria-expanded="true" title="Hide configuration">
+              <span class="toggle-arrow">&laquo;</span>
+            </button>
+          </div>
+          <form id="settings-form" class="form">
+            <label class="field">
+              <span class="field-label">AI assistant</span>
+              <select name="assistant" id="assistant-select" required></select>
+              <span class="field-hint">Claude Code and Codex are in preview and cannot run tasks yet.</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Parallel agents</span>
+              <input type="number" name="max_concurrent_agents" min="1" max="8" required />
+              <span class="field-hint">How many agents may run at the same time.</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Model</span>
+              <select name="model" id="model-select" required></select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Max runtime (minutes)</span>
+              <input type="number" name="max_runtime_minutes" min="1" max="1000" required />
+              <span class="field-hint">
+                An agent exceeding this is stopped and marked timed out.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Reasoning effort</span>
+              <select name="reasoning_effort" id="effort-select" required></select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Price per AIC (USD)</span>
+              <input type="number" name="usd_per_aic" min="0" max="100" step="any" required />
+              <span class="field-hint">Converts AI Credits to the dollar cost on top. List price: $0.01.</span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Agent working directory</span>
+              <input type="text" name="workspace_root" spellcheck="false" required />
+              <span class="field-hint">
+                Every agent runs in a fresh subfolder here. Created if missing.
+              </span>
+            </label>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="settings-save">
+                Save configuration
+              </button>
+              <span class="save-note" id="settings-note" aria-live="polite"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" aria-labelledby="perm-h">
+          <div class="card-head">
+            <h2 id="perm-h">Permissions</h2>
+            <span class="chip" id="perm-summary"></span>
+          </div>
+          <form id="permissions-form" class="form">
+            <div class="field">
+              <span class="field-label">Tools agents may use</span>
+              <div class="tool-grid" id="tool-grid"></div>
+              <span class="field-hint">
+                Passed to the CLI as an allow-list. Unchecking a tool removes the capability from
+                the model, it is not a request.
+              </span>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Also block these shell commands</span>
+              <input
+                type="text"
+                name="denied_commands"
+                spellcheck="false"
+                placeholder="e.g. curl, rm -rf, npm publish"
+              />
+              <span class="field-hint">
+                Comma separated. Added to the commands that are always blocked.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Blocked websites</span>
+              <input
+                type="text"
+                name="blocked_urls"
+                spellcheck="false"
+                placeholder="e.g. example.com, https://*.example.org"
+              />
+              <span class="field-hint">
+                Comma separated domains or URLs. Blocks web access and shell commands such as curl.
+                Shell commands can reach any other site.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Secret environment variables</span>
+              <input
+                type="text"
+                name="secret_env_vars"
+                spellcheck="false"
+                placeholder="e.g. GITHUB_TOKEN, AWS_SECRET_ACCESS_KEY"
+              />
+              <span class="field-hint">
+                Names only, never values. These are stripped from the agent's shell environment and
+                redacted from its output.
+              </span>
+            </label>
+
+            <div class="field">
+              <span class="field-label">Always enforced</span>
+              <ul class="locked-list" id="perm-locked"></ul>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="permissions-save">
+                Save permissions
+              </button>
+              <span class="save-note" id="permissions-note" aria-live="polite"></span>
+            </div>
+          </form>
+        </section>
+      </aside>
+
+      <div class="column">
+        <section class="card board-card" aria-labelledby="board-h">
+          <div class="card-head">
+            <h2 id="board-h">Agents</h2>
+            <div class="head-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="stop-all" hidden>
+                Stop all
+              </button>
+              <div class="mode-switch" id="dispatch-mode" role="radiogroup" aria-label="Start mode">
+                <button type="button" role="radio" data-mode="auto" aria-checked="false"
+                        title="Queued tasks start automatically as agent slots free up">Auto</button>
+                <button type="button" role="radio" data-mode="manual" aria-checked="true"
+                        title="Tasks start only when you press &#x25b6; on them">Manual</button>
+              </div>
+            </div>
+          </div>
+          <p class="dispatch-hint" id="dispatch-hint"></p>
+          <div id="agents-loading" class="skeleton-list" aria-hidden="true">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+          </div>
+
+          <div class="board" id="board">
+            <section class="lane" data-lane="queued" aria-labelledby="lane-queued-h">
+              <header class="lane-head">
+                <span class="lane-dot" aria-hidden="true"></span>
+                <h3 id="lane-queued-h">Queued</h3>
+                <span class="lane-count" id="count-queued">0</span>
+              </header>
+              <button type="button" class="lane-add" id="task-new" title="New task (Ctrl+N)"
+                      aria-label="New task" aria-keyshortcuts="Control+N">
+                <span class="lane-add-plus" aria-hidden="true">+</span>
+                <span class="lane-add-keys" aria-hidden="true"><kbd>Ctrl</kbd>+<kbd>N</kbd></span>
+              </button>
+              <div class="lane-body" id="lane-queued"></div>
+            </section>
+
+            <section class="lane" data-lane="running" aria-labelledby="lane-running-h">
+              <header class="lane-head">
+                <span class="lane-dot" aria-hidden="true"></span>
+                <h3 id="lane-running-h">Working</h3>
+                <span class="lane-count" id="count-running">0</span>
+              </header>
+              <div class="lane-body" id="lane-running"></div>
+            </section>
+
+            <section class="lane" data-lane="done" aria-labelledby="lane-done-h">
+              <header class="lane-head">
+                <span class="lane-dot" aria-hidden="true"></span>
+                <h3 id="lane-done-h">Finished</h3>
+                <span class="lane-count" id="count-done">0</span>
+              </header>
+              <div class="lane-body" id="lane-done"></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <dialog id="run-dialog" class="dialog">
+      <div class="dialog-head">
+        <h3 id="run-dialog-title">Agent detail</h3>
+        <button type="button" class="btn btn-ghost" id="run-dialog-close">Close</button>
+      </div>
+      <div id="run-dialog-body" class="dialog-body"></div>
+    </dialog>
+
+    <dialog id="task-dialog" class="dialog dialog-narrow" aria-labelledby="task-dialog-title">
+      <div class="dialog-head">
+        <h3 id="task-dialog-title">New task</h3>
+        <button type="button" class="btn btn-ghost" id="task-dialog-close">Close</button>
+      </div>
+      <div class="dialog-body">
+        <form id="task-form" class="form">
+          <label class="field">
+            <span class="field-label">Prompt</span>
+            <textarea
+              name="prompt"
+              rows="6"
+              required
+              placeholder="e.g. Create a file notes.md summarising what a task queue is."
+            ></textarea>
+            <span class="field-hint">
+              Runs in a fresh scratch workspace. Agents cannot push or open PRs.
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">Priority</span>
+            <select name="priority">
+              <option value="0">Normal</option>
+              <option value="5">High</option>
+              <option value="9">Urgent</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="task-submit">Add to queue</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <script src="/scripts/main.js" type="module"></script>
+  </body>
+</html>

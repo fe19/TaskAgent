@@ -1,0 +1,81 @@
+.btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+a.btn {
+  text-decoration: none;
+  display: inline-block;
+}
+
+.mode-switch {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.mode-switch > button {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 560;
+  padding: 5px 14px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-switch > button:hover {
+  color: var(--text);
+}
+
+.mode-switch > [aria-checked="true"] {
+  background: var(--ok);
+  color: #04231a;
+}
+
+.mode-switch > [data-mode="manual"][aria-checked="true"] {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}

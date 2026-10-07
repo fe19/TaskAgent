@@ -1,0 +1,76 @@
+[data-status],
+[data-outcome] {
+  --status: var(--text-dim);
+  --status-soft: #94a3b822;
+}
+
+[data-status="queued"],
+[data-outcome="queued"] {
+  --status: var(--text-faint);
+}
+
+[data-status="starting"],
+[data-status="running"],
+[data-status="stopping"],
+[data-outcome="starting"],
+[data-outcome="running"],
+[data-outcome="stopping"] {
+  --status: var(--info);
+  --status-soft: var(--info-soft);
+}
+
+[data-status="succeeded"],
+[data-outcome="succeeded"] {
+  --status: var(--ok);
+  --status-soft: var(--ok-soft);
+}
+
+[data-status="failed"],
+[data-status="timed_out"],
+[data-status="interrupted"],
+[data-status="cancelled"],
+[data-outcome="failed"],
+[data-outcome="timed_out"],
+[data-outcome="interrupted"],
+[data-outcome="cancelled"] {
+  --status: var(--danger);
+  --status-soft: var(--danger-soft);
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-transform: capitalize;
+  background: var(--status-soft);
+  color: var(--status);
+}
+
+.chip {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.prio {
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: #a5b4fc;
+}
+
+.prio[data-level="urgent"] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
