@@ -15,6 +15,7 @@ const REFRESH_EVENTS = [
   'scheduler.dispatched',
   'scheduler.error',
   'settings.updated',
+  'assistant.limits',
 ];
 
 function setConnection(name, label) {

@@ -57,6 +57,31 @@ export function presentRun(run, usage) {
   };
 }
 
+/**
+ * Claude Code limits as "% left" per window. A window whose reset time has passed has started
+ * over, so its old reading no longer applies.
+ */
+export function presentLimits(limits, now = Date.now()) {
+  if (!limits) {
+    return { available: false, reason: 'Claude Code reports its usage limits during a run; start a task to see them.' };
+  }
+  const windows = limits.windows.map((w) => {
+    const expired = w.resets_at != null && Date.parse(w.resets_at) <= now;
+    const used = expired ? 0 : w.utilization;
+    return {
+      id: w.id,
+      percent_left: used == null ? null : Math.max(0, Math.min(100, (1 - used) * 100)),
+      resets_at: expired ? null : w.resets_at,
+      reset_since: expired,
+    };
+  });
+  if (windows.length === 0) {
+    return { available: false, reason: 'This Claude Code account reports no usage limits (e.g. an API key).' };
+  }
+  // Not `status`: the router reads that key as an HTTP status.
+  return { available: true, limit_status: limits.status, windows, observed_at: limits.observed_at };
+}
+
 export function presentTask(task) {
   return { ...task, short_label: shortLabel(task.prompt, task.title) };
 }

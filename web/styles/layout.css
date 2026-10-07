@@ -73,6 +73,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.quota-stat[data-level='low'] .stat-value {
+  color: var(--warn);
+}
+
+.quota-stat[data-level='out'] .stat-value {
+  color: var(--danger);
+}
+
 .stat-label {
   font-size: 11px;
   text-transform: uppercase;

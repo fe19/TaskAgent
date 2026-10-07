@@ -28,10 +28,11 @@ async function reloadSettings() {
   permissionsView.render();
   environmentView.render();
   dispatchView.render();
-  // The price per AIC converts the quota to dollars.
-  quota.render();
-  // Queued tiles show the current model.
+  // Shows the selected assistant's allowance; the price per AIC converts Copilot's to dollars.
+  quota.load();
+  // Queued tiles show the current model; the AIC stat applies to Copilot only.
   board.render();
+  board.renderStats();
 }
 
 async function refresh() {
@@ -45,6 +46,8 @@ async function refresh() {
   board.render();
   board.renderStats();
   dispatchView.render();
+  // Claude Code reports its limits during runs; reading them back is a cheap local call.
+  if (state.settings?.assistant === 'claude-code') quota.load();
   await runDialog.refresh();
 }
 

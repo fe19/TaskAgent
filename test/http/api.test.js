@@ -22,6 +22,8 @@ async function boot() {
     readUsage: () => null,
   });
 
+  // Most tests here assert Copilot behaviour; Claude Code runs are switched on explicitly.
+  app.settings.update({ assistant: 'copilot' });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
 
@@ -310,6 +312,15 @@ test('the agents overview reports every run with its status and capacity', async
   await h.cleanup();
 });
 
+test('Claude limits are unavailable, with a reason, until a Claude Code run reports them', async () => {
+  const h = await boot();
+  const { status, body } = await h.get('/api/claude-limits');
+  assert.equal(status, 200);
+  assert.equal(body.available, false);
+  assert.match(body.reason, /start a task/);
+  await h.cleanup();
+});
+
 test('switching the assistant to Claude Code runs the next task with it, with its reported cost', async () => {
   const h = await boot();
   const saved = await h.put('/api/settings', { assistant: 'claude-code', claude_model: 'haiku' });
@@ -326,6 +337,11 @@ test('switching the assistant to Claude Code runs the next task with it, with it
   assert.equal(agent.model, 'haiku');
   assert.equal(agent.usage.cost_usd, 0.0421);
   assert.equal(agent.usage.aiu, null);
+
+  // The run reported the account's limits on the way.
+  const limits = (await h.get('/api/claude-limits')).body;
+  assert.equal(limits.available, true);
+  assert.deepEqual(limits.windows.map((w) => [w.id, Math.round(w.percent_left)]), [['five_hour', 75], ['seven_day', 40]]);
   await h.cleanup();
 });
 

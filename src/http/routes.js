@@ -8,10 +8,10 @@ import {
 import { ASSISTANT_ENV, PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
 import { resultFileName, resultMarkdown } from '../domain/result-document.js';
 import { notFound } from '../errors.js';
-import { presentAgent, presentRun, presentTask } from '../presenters.js';
+import { presentAgent, presentLimits, presentRun, presentTask } from '../presenters.js';
 
 /** Maps the JSON API onto the shared actions and stores. */
-export function registerRoutes(router, { actions, settings, tasks, runs, scheduler, resources, quota }) {
+export function registerRoutes(router, { actions, settings, tasks, runs, limits, scheduler, resources, quota }) {
   router
     .get('/api/health', () => ({
       ok: true,
@@ -20,6 +20,7 @@ export function registerRoutes(router, { actions, settings, tasks, runs, schedul
     }))
     .get('/api/resources', () => resources.sample())
     .get('/api/quota', () => quota.read())
+    .get('/api/claude-limits', () => presentLimits(limits.get('claude-code')))
 
     .get('/api/settings', () => {
       const current = settings.read();

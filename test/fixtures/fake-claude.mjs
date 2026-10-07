@@ -61,6 +61,19 @@ if (prompt.includes('HANG')) {
   // Names only, so tests can check what the agent's environment holds.
   writeFileSync(`${process.cwd()}/env-names.json`, JSON.stringify(Object.keys(process.env)));
   emit({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } });
+  // Shape captured from claude 2.1.285; utilization is the share used (0–1).
+  emit({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      resetsAt: 4102444800,
+      rateLimitType: 'five_hour',
+      unifiedWindows: {
+        five_hour: { utilization: 0.25, resetsAt: 4102444800 },
+        seven_day: { utilization: 0.6, resetsAt: 4102963200 },
+      },
+    },
+  });
   assistant([{ type: 'text', text: 'Done. Created out.txt with the content hello.' }]);
   emit({
     type: 'result',

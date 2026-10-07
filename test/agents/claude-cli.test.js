@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArgs, buildEnv, interpret, parseEvent, toolArgs } from '../../src/agents/claude-cli.js';
+import { buildArgs, buildEnv, interpret, parseEvent, parseRateLimits, toolArgs } from '../../src/agents/claude-cli.js';
 
 const base = {
   prompt: 'do a thing',
@@ -195,4 +195,35 @@ test('an error result is an error even though usage is still reported', () => {
 test('unknown events are ignored', () => {
   assert.deepEqual(interpret({ type: 'stream_event' }), {});
   assert.deepEqual(interpret({ type: 'system', subtype: 'compact_boundary' }), {});
+});
+
+test('a rate-limit event yields each window with its share used and reset time', () => {
+  const facts = interpret({
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'allowed',
+      resetsAt: 1791395400,
+      rateLimitType: 'five_hour',
+      unifiedWindows: {
+        five_hour: { utilization: 0.03, resetsAt: 1791395400 },
+        seven_day: { utilization: 0.05, resetsAt: 1791640800 },
+      },
+    },
+  });
+  assert.deepEqual(facts.limits, {
+    status: 'allowed',
+    windows: [
+      { id: 'five_hour', utilization: 0.03, resets_at: new Date(1791395400 * 1000).toISOString() },
+      { id: 'seven_day', utilization: 0.05, resets_at: new Date(1791640800 * 1000).toISOString() },
+    ],
+  });
+});
+
+test('without unified windows the single reported window is used', () => {
+  assert.deepEqual(parseRateLimits({ status: 'allowed_warning', rateLimitType: 'seven_day', utilization: 0.9, resetsAt: 0 }), {
+    status: 'allowed_warning',
+    windows: [{ id: 'seven_day', utilization: 0.9, resets_at: new Date(0).toISOString() }],
+  });
+  assert.equal(parseRateLimits(null), null);
+  assert.deepEqual(interpret({ type: 'rate_limit_event' }), {});
 });

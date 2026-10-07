@@ -114,9 +114,33 @@ export function interpret(evt) {
     }
     case 'result':
       return interpretResult(evt);
+    case 'rate_limit_event': {
+      const limits = parseRateLimits(evt.rate_limit_info);
+      return limits ? { limits } : {};
+    }
     default:
       return {};
   }
+}
+
+/**
+ * Subscription limits as Claude Code reports them: per window, the share used (0–1) and when it
+ * resets. Accounts without such limits (API keys) send none.
+ */
+export function parseRateLimits(info) {
+  if (!info || typeof info !== 'object') return null;
+  const source = info.unifiedWindows && typeof info.unifiedWindows === 'object'
+    ? info.unifiedWindows
+    : info.rateLimitType ? { [info.rateLimitType]: info } : {};
+  const windows = Object.entries(source)
+    .filter(([, w]) => w && (typeof w.utilization === 'number' || typeof w.resetsAt === 'number'))
+    .map(([id, w]) => ({
+      id,
+      utilization: typeof w.utilization === 'number' ? w.utilization : null,
+      resets_at: typeof w.resetsAt === 'number' ? new Date(w.resetsAt * 1000).toISOString() : null,
+    }));
+  if (windows.length === 0 && !info.status) return null;
+  return { status: info.status ?? null, windows };
 }
 
 function interpretAssistant(content) {

@@ -46,13 +46,13 @@ test('auto_dispatch is only true for the exact string "true"', () => {
   assert.equal(decode(undefined).auto_dispatch, false);
 });
 
-test('assistant defaults to GitHub Copilot; Claude Code is selectable, preview assistants are rejected', () => {
-  assert.equal(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).assistant, 'copilot');
+test('assistant defaults to Claude Code; Copilot is selectable, preview assistants are rejected', () => {
+  assert.equal(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).assistant, 'claude-code');
   assert.deepEqual(validateSettings({ assistant: 'copilot' }).values, { assistant: 'copilot' });
   assert.deepEqual(validateSettings({ assistant: 'claude-code' }).values, { assistant: 'claude-code' });
   assert.match(validateSettings({ assistant: 'codex' }).errors[0], /Codex is in preview/);
   assert.match(validateSettings({ assistant: 'other' }).errors[0], /must be one of/);
-  assert.deepEqual(SETTING_SPEC.assistant.values, ['copilot', 'claude-code']);
+  assert.deepEqual(SETTING_SPEC.assistant.values, ['claude-code', 'copilot']);
 });
 
 test('Claude Code has its own model and effort, separate from Copilot\'s', () => {

@@ -30,6 +30,8 @@ async function topbar(page) {
     const text = (id) => document.getElementById(id).textContent;
     const group = document.getElementById('usage-group');
     return {
+      claude: document.querySelector('[name=assistant]').value === 'claude-code',
+      aicHidden: document.getElementById('stat-aic-box').hidden,
       aic: text('stat-aic'),
       usd: text('stat-usd'),
       grouped: ['stat-tokens', 'stat-aic', 'stat-usd'].every((id) => group.contains(document.getElementById(id))),
@@ -44,10 +46,14 @@ async function topbar(page) {
     };
   });
   // "n/a", never a made-up 0, when no run reported usage.
-  check('topbar shows AI Credits used', s.aic === 'n/a' || /^\d+(\.\d+)?$/.test(s.aic), s.aic);
+  if (s.claude) {
+    check('AIC used is hidden while Claude Code is the assistant', s.aicHidden, `hidden=${s.aicHidden}`);
+  } else {
+    check('topbar shows AI Credits used', !s.aicHidden && (s.aic === 'n/a' || /^\d+(\.\d+)?$/.test(s.aic)), s.aic);
+  }
   check(
-    'tokens, AIC and dollar cost sit in one group; cost is n/a exactly when AIC is',
-    s.grouped && (s.aic === 'n/a' ? s.usd === 'n/a' : /^(\$\d+(\.\d+)?|<\$0\.01)$/.test(s.usd)) && Number(s.rate) > 0,
+    'tokens, AIC and dollar cost sit in one group; cost is a dollar amount or n/a',
+    s.grouped && (s.usd === 'n/a' || /^(\$\d+(\.\d+)?|<\$0\.01)$/.test(s.usd)) && Number(s.rate) > 0,
     `${s.usd} at $${s.rate}/AIC`,
   );
   check(
@@ -60,19 +66,26 @@ async function topbar(page) {
       const value = document.getElementById('stat-left').textContent;
       const pct = document.getElementById('stat-left-pct').textContent;
       const tip = document.getElementById('quota-stat').title;
+      const claude = document.querySelector('[name=assistant]').value === 'claude-code';
+      const labels = [document.getElementById('stat-left-label').textContent, document.getElementById('stat-left-pct-label').textContent];
       const group = document.getElementById('usage-group');
       const grouped = ['stat-left', 'stat-left-pct'].every((id) => group.contains(document.getElementById(id)));
-      return value === '–' ? null : { value, pct, tip, grouped };
+      return value === '–' ? null : { value, pct, tip, grouped, claude, labels };
     }),
     { attempts: 20, intervalMs: 500 },
   );
   check(
-    'topbar shows the remaining Copilot allowance in dollars and percent, or why it is unknown',
+    q?.claude
+      ? 'topbar shows the Claude Code 5-hour and weekly limits left, or why they are unknown'
+      : 'topbar shows the remaining Copilot allowance in dollars and percent, or why it is unknown',
     Boolean(q?.grouped) &&
-      (/^\$\d+(\.\d+)?$/.test(q.value) ? /AI Credits left/.test(q.tip) && /^\d+%$/.test(q.pct)
+      (q.claude
+        ? /^5h left/.test(q.labels[0]) && /^week left/.test(q.labels[1]) &&
+          (/^\d+%$/.test(q.value) ? /Claude Code 5-hour limit/.test(q.tip) : q.value === 'n/a' && q.tip.length > 0)
+        : /^\$\d+(\.\d+)?$/.test(q.value) ? /AI Credits left/.test(q.tip) && /^\d+%$/.test(q.pct)
         : q.value === '∞' ? /Unlimited/.test(q.tip)
         : q.value === 'n/a' && q.tip.length > 0),
-    q ? `${q.value} · ${q.pct} · ${q.tip}` : 'never loaded',
+    q ? `${q.labels.join(' / ')}: ${q.value} · ${q.pct} · ${q.tip}` : 'never loaded',
   );
   check('SSE stream reports live', s.conn === 'live', `state=${s.conn}`);
   check('no error banner when nothing failed', s.banner === 0, `height=${s.banner}`);
@@ -114,6 +127,7 @@ async function assistantSwitch(page) {
     const visible = (name) => !f.elements[name].closest('.field').hidden;
     const select = f.elements.assistant;
     const options = [...select.options].map((o) => ({ id: o.value, disabled: o.disabled }));
+    const original = select.value;
 
     select.value = 'claude-code';
     select.dispatchEvent(new Event('change'));
@@ -126,11 +140,15 @@ async function assistantSwitch(page) {
 
     select.value = 'copilot';
     select.dispatchEvent(new Event('change'));
+    await wait(1200);
     const copilotShown = visible('model') && !visible('claude_model');
-    f.requestSubmit();
+    const savedOnPick = (await (await fetch('/api/settings')).json()).settings.assistant;
+
+    select.value = original;
+    select.dispatchEvent(new Event('change'));
     await wait(1200);
     const restored = (await (await fetch('/api/settings')).json()).settings.assistant;
-    return { options, claudeShown, copilotShown, saved: res.settings, enforced, restored };
+    return { options, claudeShown, copilotShown, savedOnPick, saved: res.settings, enforced, restored, original };
   });
   check(
     'Claude Code is selectable; Codex is still preview',
@@ -147,7 +165,8 @@ async function assistantSwitch(page) {
     a.saved.assistant === 'claude-code' && a.saved.claude_model === 'opus' && a.enforced.some((g) => g.includes('curl can still reach')),
     `${a.saved.assistant} · ${a.saved.claude_model}`,
   );
-  check('the assistant is switched back to Copilot', a.restored === 'copilot', a.restored);
+  check('picking an assistant saves it without pressing Save', a.savedOnPick === 'copilot', a.savedOnPick);
+  check('the assistant is switched back to what it was', a.restored === a.original, `${a.original} → ${a.restored}`);
 }
 
 async function permissions(page) {

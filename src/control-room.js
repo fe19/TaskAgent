@@ -5,6 +5,7 @@ import { openDatabase, reconcileOrphanedRuns } from './store/database.js';
 import { createSettingsStore } from './store/settings-store.js';
 import { createTaskStore } from './store/task-store.js';
 import { createRunStore } from './store/run-store.js';
+import { createLimitsStore } from './store/assistant-limits.js';
 import { Scheduler } from './agents/scheduler.js';
 import { createResourceMonitor } from './agents/resource-usage.js';
 import { createQuotaReader, ghCopilotUser } from './store/copilot-quota.js';
@@ -23,7 +24,12 @@ export function createControlRoom(overrides = {}) {
   });
   const tasks = createTaskStore({ db });
   const runs = createRunStore({ db });
+  const limits = createLimitsStore({ db });
   const bus = new Bus();
+  // Runs report account limits as they go; keep the latest so the top bar survives a restart.
+  bus.on('event', ({ type, payload }) => {
+    if (type === 'assistant.limits') limits.save(payload.assistant, payload.limits);
+  });
   const scheduler = new Scheduler({
     settings,
     tasks,
@@ -48,5 +54,5 @@ export function createControlRoom(overrides = {}) {
     db.close();
   }
 
-  return { config, db, bus, settings, tasks, runs, scheduler, actions, resources, quota, orphaned, close };
+  return { config, db, bus, settings, tasks, runs, limits, scheduler, actions, resources, quota, orphaned, close };
 }

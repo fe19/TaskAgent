@@ -136,6 +136,8 @@ export class AgentRun {
     if (facts.message) this.finalMessage = facts.message;
     if (facts.usage) this.reportedUsage = facts.usage;
     if (facts.error) this.reportedError = facts.error;
+    // Account-wide, not per run: the control room keeps the latest reading.
+    if (facts.limits) this.#publish('assistant.limits', { assistant: this.adapter.id, limits: facts.limits });
     if (facts.result) {
       this.runs.recordCliResult(this.runId, facts.result);
       // The CLI exits 0 on SIGTERM; "Finished with exit code 0" would mislead.

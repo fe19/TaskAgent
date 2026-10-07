@@ -42,7 +42,7 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 
 ## Data
 
-`settings`, `tasks`, `runs` (with the `assistant` that ran it), `run_events`, `run_usage` (`nano_aiu` for Copilot, `cost_usd` for Claude Code) — see `store/database.js`. New columns are added on boot by `addColumn`.
+`settings`, `tasks`, `runs` (with the `assistant` that ran it), `run_events`, `run_usage` (`nano_aiu` for Copilot, `cost_usd` for Claude Code), `assistant_limits` (the latest account limits an assistant reported, e.g. Claude Code's 5-hour and weekly windows) — see `store/database.js`. New columns are added on boot by `addColumn`.
 
 On boot, runs left live by a previous process become `interrupted`, and their tasks are requeued.
 

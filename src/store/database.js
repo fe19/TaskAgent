@@ -70,6 +70,12 @@ CREATE TABLE IF NOT EXISTS run_usage (
   synced_at          TEXT
 );
 
+CREATE TABLE IF NOT EXISTS assistant_limits (
+  assistant   TEXT PRIMARY KEY,
+  info        TEXT NOT NULL,
+  observed_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, priority DESC, id);
 CREATE INDEX IF NOT EXISTS idx_runs_task    ON runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_runs_status  ON runs(status);

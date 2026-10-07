@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { presentAgent, presentRun, presentTask } from '../src/presenters.js';
+import { presentAgent, presentLimits, presentRun, presentTask } from '../src/presenters.js';
 
 const RUN = {
   id: 1,
@@ -107,4 +107,37 @@ test('a task is presented with a short label alongside its full prompt', () => {
   const task = presentTask({ id: 1, title: 'Long title', prompt: 'Please create a file notes.md' });
   assert.equal(task.short_label, 'Create file notes.md');
   assert.equal(task.prompt, 'Please create a file notes.md', 'the original prompt is preserved');
+});
+
+test('Claude limits are shown as percent left per window', () => {
+  const now = Date.parse('2026-10-07T12:00:00Z');
+  const view = presentLimits(
+    {
+      status: 'allowed',
+      observed_at: '2026-10-07T11:59:00Z',
+      windows: [
+        { id: 'five_hour', utilization: 0.25, resets_at: '2026-10-07T15:00:00.000Z' },
+        { id: 'seven_day', utilization: 0.6, resets_at: '2026-10-10T08:00:00.000Z' },
+      ],
+    },
+    now,
+  );
+  assert.equal(view.available, true);
+  assert.deepEqual(view.windows, [
+    { id: 'five_hour', percent_left: 75, resets_at: '2026-10-07T15:00:00.000Z', reset_since: false },
+    { id: 'seven_day', percent_left: 40, resets_at: '2026-10-10T08:00:00.000Z', reset_since: false },
+  ]);
+});
+
+test('a window whose reset time has passed is shown as full again', () => {
+  const view = presentLimits(
+    { status: 'allowed', windows: [{ id: 'five_hour', utilization: 0.9, resets_at: '2026-10-07T10:00:00.000Z' }] },
+    Date.parse('2026-10-07T12:00:00Z'),
+  );
+  assert.deepEqual(view.windows[0], { id: 'five_hour', percent_left: 100, resets_at: null, reset_since: true });
+});
+
+test('no reading yet, or no windows, is unavailable with a reason, not zero', () => {
+  assert.match(presentLimits(null).reason, /start a task/);
+  assert.match(presentLimits({ status: 'allowed', windows: [] }).reason, /no usage limits/);
 });

@@ -48,6 +48,8 @@ function retryMode(run) {
 }
 
 export function renderStats() {
+  // AI Credits are Copilot's unit; Claude Code reports dollars.
+  $('stat-aic-box').hidden = state.settings?.assistant === 'claude-code';
   if (!state.loaded) {
     $('stat-tokens').textContent = '–';
     $('stat-aic').textContent = '–';

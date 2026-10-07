@@ -12,7 +12,8 @@ function harness({ settings: patch = {} } = {}) {
   const root = tempDir('acr-sched-');
   const workspaceRoot = join(root, 'workspaces');
   const stores = createStores({ workspaceRoot });
-  stores.settings.update({ auto_dispatch: true, ...patch });
+  // These tests drive the fake Copilot CLI; Claude Code has its own in agent-run.test.js.
+  stores.settings.update({ assistant: 'copilot', auto_dispatch: true, ...patch });
 
   const bus = new Bus();
   const scheduler = new Scheduler({
@@ -213,7 +214,7 @@ test('runs use the workspace root from settings when none is injected', async ()
   const root = tempDir('acr-sched-ws-');
   const workspaceRoot = join(root, 'from-settings');
   const stores = createStores({ resolvePath: (v) => String(v) });
-  stores.settings.update({ auto_dispatch: true, workspace_root: workspaceRoot });
+  stores.settings.update({ assistant: 'copilot', auto_dispatch: true, workspace_root: workspaceRoot });
 
   const scheduler = new Scheduler({
     settings: stores.settings,

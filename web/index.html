@@ -20,7 +20,7 @@
         <span class="brand-mark" aria-hidden="true">AT</span>
         <div>
           <h1>Agents Tasks</h1>
-          <p class="brand-sub">GitHub Copilot CLI agents · local</p>
+          <p class="brand-sub">Claude Code &amp; GitHub Copilot agents · local</p>
         </div>
       </div>
       <div class="topbar-stats">
@@ -29,7 +29,7 @@
             <span class="stat-value" id="stat-tokens">–</span>
             <span class="stat-label">tokens used</span>
           </div>
-          <div class="stat" title="GitHub Copilot AI Credits used by these runs">
+          <div class="stat" id="stat-aic-box" title="GitHub Copilot AI Credits used by these runs">
             <span class="stat-value" id="stat-aic">–</span>
             <span class="stat-label">AIC used</span>
           </div>
@@ -37,13 +37,13 @@
             <span class="stat-value" id="stat-usd">–</span>
             <span class="stat-label">cost</span>
           </div>
-          <div class="stat quota-stat" id="quota-stat" title="Remaining monthly GitHub Copilot allowance">
+          <div class="stat quota-stat" id="quota-stat" title="Remaining allowance of the selected assistant">
             <span class="stat-value" id="stat-left">–</span>
-            <span class="stat-label">left</span>
+            <span class="stat-label" id="stat-left-label">left</span>
           </div>
-          <div class="stat quota-stat" title="Remaining monthly GitHub Copilot allowance">
+          <div class="stat quota-stat" title="Remaining allowance of the selected assistant">
             <span class="stat-value" id="stat-left-pct">–</span>
-            <span class="stat-label">left</span>
+            <span class="stat-label" id="stat-left-pct-label">left</span>
           </div>
         </div>
         <div class="stat-group" id="hw-group" title="Hardware used by the running agents">
