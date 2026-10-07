@@ -1,0 +1,4 @@
+# Ignoring
+data/
+workspaces/
+.DS_Store
