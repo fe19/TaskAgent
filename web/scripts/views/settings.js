@@ -1,4 +1,4 @@
-import { $, flashNote, withButton } from '../ui.js';
+import { $, flashNote, showError, withButton } from '../ui.js';
 import { state } from '../store.js';
 import { esc } from '../format.js';
 import { put } from '../api-client.js';
@@ -59,7 +59,23 @@ export function render() {
 
 export function mount({ refresh, reloadSettings }) {
   const form = $('settings-form');
-  $('assistant-select').addEventListener('change', (event) => showAssistantFields(event.target.value));
+  // The assistant applies as soon as it is picked: a choice left unsaved would quietly keep
+  // starting tasks on the previous one.
+  const select = $('assistant-select');
+  select.addEventListener('change', async () => {
+    const previous = state.settings?.assistant;
+    showAssistantFields(select.value);
+    try {
+      await put('/api/settings', { assistant: select.value });
+      flashNote('settings-note');
+      // The enforced guarantees and queued tiles follow the assistant.
+      await reloadSettings();
+    } catch (err) {
+      select.value = previous;
+      showAssistantFields(previous);
+      showError(`Could not switch the assistant: ${err.message}`);
+    }
+  });
   form.addEventListener(
     'submit',
     withButton($('settings-save'), async (event) => {

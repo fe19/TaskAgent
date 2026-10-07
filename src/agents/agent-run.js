@@ -101,12 +101,19 @@ export class AgentRun {
     this.runs.markRunning(this.runId, this.child.pid);
     this.#publish('run.started');
 
-    this.child.on('error', (err) => this.#finalize({ status: 'failed', error: err.message }));
+    this.child.on('error', (err) => this.#finalize({ status: 'failed', error: this.#spawnError(err) }));
     this.child.stderr.on('data', (chunk) => {
       this.stderr = `${this.stderr}${chunk}`.slice(-STDERR_LIMIT);
     });
     createInterface({ input: this.child.stdout }).on('line', (line) => this.#onLine(line));
     this.child.on('close', (code) => this.#onClose(code));
+  }
+
+  /** A missing CLI is the most common setup mistake; say which one and how to fix it. */
+  #spawnError(err) {
+    if (err.code !== 'ENOENT') return err.message;
+    const variable = this.adapter.binOption.replace(/Bin$/, '').toUpperCase();
+    return `${this.bin} is not installed or not on PATH. Install it, set ${variable}_BIN, or switch the AI assistant.`;
   }
 
   /** The root agents may access freely, unless it holds config `--add-dir` would trust. */

@@ -266,7 +266,10 @@ test('a missing binary fails the run instead of crashing the server', async () =
   const outcome = await h.run.exited;
 
   assert.equal(outcome.status, 'failed');
-  assert.match(h.stores.runs.get(h.run.runId).error, /ENOENT|spawn/);
+  assert.equal(
+    h.stores.runs.get(h.run.runId).error,
+    '/nonexistent/copilot-binary is not installed or not on PATH. Install it, set COPILOT_BIN, or switch the AI assistant.',
+  );
   h.cleanup();
 });
 
@@ -374,5 +377,13 @@ test('the Claude Code agent gets its own environment, without GitHub tokens or s
   assert.ok(names.includes('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB'));
   assert.ok(!names.includes('GH_TOKEN'));
   assert.ok(!names.includes('ACR_TEST_SECRET'));
+  h.cleanup();
+});
+
+test('a missing claude binary names CLAUDE_BIN in its error', async () => {
+  const h = claude({ claudeBin: '/nonexistent/claude' });
+  h.run.start();
+  await h.run.exited;
+  assert.match(h.stores.runs.get(h.run.runId).error, /\/nonexistent\/claude is not installed .* set CLAUDE_BIN/);
   h.cleanup();
 });
