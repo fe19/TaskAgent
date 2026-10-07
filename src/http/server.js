@@ -5,6 +5,7 @@ import { registerRoutes } from './routes.js';
 import { createSseHub } from './sse.js';
 import { createStaticHandler } from './static-files.js';
 import { json } from './responses.js';
+import { localRequestRejection } from './local-origin.js';
 
 /** The web interface: control room + JSON API + SSE + static files. */
 export function createApp(overrides = {}) {
@@ -18,7 +19,11 @@ export function createApp(overrides = {}) {
   const serveStatic = createStaticHandler({ '/': room.config.webDir, '/domain/': room.config.domainDir });
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+    const { address, port } = server.address();
+    const rejection = localRequestRejection(req.headers, { bindHost: address, port });
+    if (rejection) return void json(res, 403, { error: rejection });
+
+    const url = new URL(req.url, `http://${req.headers.host}`);
     try {
       if (!url.pathname.startsWith('/api/')) await serveStatic(req, res, url);
       else if (!(await router.handle(req, res, url))) json(res, 404, { error: 'Not found' });

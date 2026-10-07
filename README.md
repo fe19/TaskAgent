@@ -61,6 +61,7 @@ The two **left** stats show your monthly Copilot AI Credit allowance still unuse
 
 ## Guarantees
 
+- The server answers only requests addressed to itself: a `Host` or `Origin` other than localhost/127.0.0.1/[::1] (or the bind address) on its own port gets a 403. Other websites open in your browser cannot create or start tasks, and DNS rebinding is refused.
 - Agent CPU/RAM in the top bar is measured live (`ps`) over each agent's whole process tree; CPU is a share of all cores. Shown as n/a where `ps` is unavailable.
 - Token usage comes from the Copilot session store. It is never estimated: a run with no data shows "not reported yet" (still running) or "unavailable" (finished).
 - Each run gets a throwaway workspace and may access the whole agent working directory (`--add-dir`); other paths need approval and are denied. `git push`, `gh` and `git remote` are always denied, agent `git` cannot see this repo, built-in MCPs are disabled.
