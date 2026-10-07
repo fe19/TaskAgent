@@ -93,3 +93,12 @@ test('a root with .github/skills or agents counts as holding trusted config', ()
   assert.equal(hasTrustedConfig(root), true);
   removeDir(root);
 });
+
+test('every directory the CLI loads project skills from counts as trusted config', () => {
+  for (const dir of [['.github', 'skills'], ['.agents', 'skills'], ['.claude', 'skills']]) {
+    const root = tempDir('acr-trust-');
+    mkdirSync(join(root, ...dir), { recursive: true });
+    assert.equal(hasTrustedConfig(root), true, dir.join('/'));
+    removeDir(root);
+  }
+});

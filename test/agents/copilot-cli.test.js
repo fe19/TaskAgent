@@ -73,6 +73,56 @@ test('the environment allows tools without trusting the workspace directory', ()
   );
 });
 
+test('the agent gets only what the CLI needs, not our whole environment', () => {
+  const env = buildEnv({
+    workspaceRoot: '/tmp/ws',
+    env: {
+      PATH: '/usr/bin',
+      HOME: '/Users/me',
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'C',
+      XDG_CONFIG_HOME: '/Users/me/.config',
+      https_proxy: 'http://proxy:3128',
+      COPILOT_HOME: '/Users/me/.copilot',
+      GH_TOKEN: 'gho_x',
+      AWS_SECRET_ACCESS_KEY: 'aws',
+      OPENAI_API_KEY: 'sk',
+      SSH_AUTH_SOCK: '/tmp/ssh',
+      NPM_TOKEN: 'npm',
+      DB_FILE: '/data/x.db',
+    },
+  });
+  assert.deepEqual(Object.keys(env).sort(), [
+    'COPILOT_ALLOW_ALL',
+    'COPILOT_HOME',
+    'GH_TOKEN',
+    'GIT_CEILING_DIRECTORIES',
+    'HOME',
+    'LANG',
+    'LC_ALL',
+    'NO_COLOR',
+    'PATH',
+    'XDG_CONFIG_HOME',
+    'https_proxy',
+  ]);
+});
+
+test('operator-added names are passed too, whatever their case', () => {
+  const env = buildEnv({
+    workspaceRoot: '/tmp/ws',
+    passedEnvVars: ['java_home', 'GOPATH'],
+    env: { JAVA_HOME: '/jdk', GOPATH: '/go', AWS_SECRET_ACCESS_KEY: 'aws' },
+  });
+  assert.equal(env.JAVA_HOME, '/jdk');
+  assert.equal(env.GOPATH, '/go');
+  assert.ok(!('AWS_SECRET_ACCESS_KEY' in env));
+});
+
+test('our own settings override anything inherited', () => {
+  const env = buildEnv({ workspaceRoot: '/tmp/ws', env: { COPILOT_ALLOW_ALL: 'true', PATH: '/bin' } });
+  assert.equal(env.COPILOT_ALLOW_ALL, '1');
+});
+
 test('the git ceiling stops an agent walking up into our own repository', () => {
   assert.equal(buildEnv({ workspaceRoot: '/tmp/ws' }).GIT_CEILING_DIRECTORIES, '/tmp/ws');
 });

@@ -34,14 +34,23 @@ Every finished tile can be dragged. If its task is already queued or working aga
 
 The UI adapts to phones and tablets: on narrow screens the configuration starts collapsed so the board comes first, and the lanes stack. Dragging needs a mouse; on touch screens use the tile buttons instead.
 
-A terminal UI is planned once the web UI is settled. The core is UI-agnostic; see [the extension skill](.github/skills/extend-agents-tasks/SKILL.md).
+A terminal UI is planned once the web UI is settled. The core is UI-agnostic; see [the extension skill](.claude/skills/extend-agents-tasks/SKILL.md).
 
 ## Test
 
 ```bash
 npm test             # offline, uses test/fixtures/fake-copilot.mjs
-npm run verify:ui    # headless Chrome against a running fake-agent server; see the skill
+npm run verify:ui    # headless Chrome against a running fake-agent server
 ```
+
+How to run the app against the fake CLI and verify a change: [the verify skill](.claude/skills/verify-agents-tasks/SKILL.md).
+
+### Skills for coding agents
+
+`.claude/skills/` holds [agent skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) for working on this repo. Both Claude Code and GitHub Copilot (CLI and coding agent) load them from there:
+
+- `extend-agents-tasks`: layering, recipes for new operations/settings/backends, rules that must not regress
+- `verify-agents-tasks`: test suite, running against the fake CLI, headless UI check
 
 ## Configuration
 
@@ -59,11 +68,24 @@ The dollar cost in the top bar is AIC × **Price per AIC** (Agent configuration,
 
 The two **left** stats show your monthly Copilot AI Credit allowance still unused, in dollars and in percent (hover for AIC and reset date). It comes from `gh api /copilot_internal/user` (undocumented GitHub endpoint), covers your whole Copilot account and refreshes every 60 s. Shows n/a if `gh` fails.
 
+## Environment variables
+
+Agents do not inherit the server's environment. They receive only:
+
+- `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`/`TMP`/`TEMP`, `LANG`, `LANGUAGE`, `TZ`, `TERM`, `LC_*`, `XDG_*`
+- proxy and CA settings: `HTTP(S)_PROXY`, `NO_PROXY`, `ALL_PROXY`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`
+- Copilot and GitHub sign-in: `COPILOT_*`, `GH_HOST`, `GH_TOKEN`, `GITHUB_TOKEN`
+- on Windows, the system variables Node needs (`SYSTEMROOT`, `COMSPEC`, `APPDATA`, …)
+- the names you add under **Also pass these variables** in the Environment variables section (e.g. `JAVA_HOME`, `GOPATH`). Values come from the server's environment; a name that is not set there is skipped.
+
+Cloud keys, `SSH_AUTH_SOCK` and everything else stay out. `COPILOT_GITHUB_TOKEN`, `GH_TOKEN` and `GITHUB_TOKEN` are always **secret**: the CLI can sign in with them, but they are stripped from the agent's shell and redacted from its output. Add more under **Secret environment variables**.
+
 ## Guarantees
 
 - The server answers only requests addressed to itself: a `Host` or `Origin` other than localhost/127.0.0.1/[::1] (or the bind address) on its own port gets a 403. Other websites open in your browser cannot create or start tasks, and DNS rebinding is refused.
 - Agent CPU/RAM in the top bar is measured live (`ps`) over each agent's whole process tree; CPU is a share of all cores. Shown as n/a where `ps` is unavailable.
 - Token usage comes from the Copilot session store. It is never estimated: a run with no data shows "not reported yet" (still running) or "unavailable" (finished).
+- Agents get a minimal environment; see [Environment variables](#environment-variables).
 - Each run gets a throwaway workspace and may access the whole agent working directory (`--add-dir`); other paths need approval and are denied. `git push`, `gh` and `git remote` are always denied, agent `git` cannot see this repo, built-in MCPs are disabled.
 - Web access (`web_fetch`) is off by default. Blocked websites (`--deny-url`) apply to it and to shell commands like `curl`. The CLI cannot enforce an allow-list: with the shell enabled, every unblocked site is reachable.
 

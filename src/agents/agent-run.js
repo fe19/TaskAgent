@@ -93,7 +93,7 @@ export class AgentRun {
     this.child = spawn(this.copilotBin, args, {
       cwd: this.workspace,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: buildEnv({ workspaceRoot: this.workspaceRoot }),
+      env: buildEnv({ workspaceRoot: this.workspaceRoot, passedEnvVars: this.settings.passed_env_vars }),
     });
 
     this.runs.markRunning(this.runId, this.child.pid);
@@ -110,7 +110,7 @@ export class AgentRun {
   /** The root agents may access freely, unless it holds config `--add-dir` would trust. */
   #sharedRoot() {
     if (!hasTrustedConfig(this.workspaceRoot)) return this.workspaceRoot;
-    this.#record('warning', 'Working directory has .github/skills or agents; access limited to the run workspace');
+    this.#record('warning', 'Working directory has agent skills or custom agents; access limited to the run workspace');
     return null;
   }
 

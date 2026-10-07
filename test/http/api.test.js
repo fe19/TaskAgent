@@ -78,6 +78,10 @@ test('settings come with the spec and permission catalogue the UI renders from',
   assert.ok(body.permissions.tools.length > 0);
   assert.ok(body.permissions.core_denied_commands.includes('git push'));
   assert.ok(body.permissions.enforced.length > 0);
+  assert.ok(body.environment.passed.includes('PATH'));
+  assert.ok(body.environment.passed_prefixes.includes('COPILOT_'));
+  assert.ok(body.environment.core_secrets.includes('GH_TOKEN'));
+  assert.deepEqual(body.settings.passed_env_vars, []);
   await h.cleanup();
 });
 

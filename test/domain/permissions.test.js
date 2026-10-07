@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   AVAILABLE_TOOLS,
   CORE_DENIED_COMMANDS,
+  CORE_SECRET_ENV_VARS,
   TOOL_IDS,
   DEFAULT_TOOL_IDS,
   invalidUrlPatterns,
@@ -81,11 +82,17 @@ test('every denied command becomes a shell deny-tool flag', () => {
   }
 });
 
-test('secret env vars are passed by name and omitted when empty', () => {
-  const withSecrets = permissionArgs({ secret_env_vars: 'GITHUB_TOKEN, AWS_KEY' });
-  const at = withSecrets.indexOf('--secret-env-vars');
-  assert.equal(withSecrets[at + 1], 'GITHUB_TOKEN,AWS_KEY');
-  assert.ok(!permissionArgs({}).includes('--secret-env-vars'));
+const secretsOf = (args) => args[args.indexOf('--secret-env-vars') + 1].split(',');
+
+test('GitHub tokens are always secret, even with no operator secrets', () => {
+  assert.deepEqual(secretsOf(permissionArgs({})), CORE_SECRET_ENV_VARS);
+});
+
+test('operator secrets are added by name to the core ones, without duplicates', () => {
+  assert.deepEqual(secretsOf(permissionArgs({ secret_env_vars: 'GITHUB_TOKEN, AWS_KEY' })), [
+    ...CORE_SECRET_ENV_VARS,
+    'AWS_KEY',
+  ]);
 });
 
 test('permissionArgs tolerates being called with nothing at all', () => {

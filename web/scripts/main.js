@@ -6,6 +6,7 @@ import { startClock } from './clock.js';
 import * as actions from './actions.js';
 import * as settingsView from './views/settings.js';
 import * as permissionsView from './views/permissions.js';
+import * as environmentView from './views/environment.js';
 import * as taskForm from './views/task-form.js';
 import * as dispatchView from './views/dispatch.js';
 import * as board from './views/board.js';
@@ -18,13 +19,14 @@ import * as dragDrop from './views/drag-drop.js';
 // Poll if SSE silently dies.
 const POLL_MS = 10000;
 
-const VIEWS = [sidebar, settingsView, permissionsView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions];
+const VIEWS = [sidebar, settingsView, permissionsView, environmentView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions];
 
 async function reloadSettings() {
-  const { settings, spec, permissions } = await get('/api/settings');
-  Object.assign(state, { settings, spec, permissionMeta: permissions });
+  const { settings, spec, permissions, environment } = await get('/api/settings');
+  Object.assign(state, { settings, spec, permissionMeta: permissions, environmentMeta: environment });
   settingsView.render();
   permissionsView.render();
+  environmentView.render();
   dispatchView.render();
   // The price per AIC converts the quota to dollars.
   quota.render();

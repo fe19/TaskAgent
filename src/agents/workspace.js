@@ -53,7 +53,15 @@ export function createWorkspace(root, { taskId, sessionId }) {
   return dir;
 }
 
+/** Where the CLI loads project skills and custom agents from. */
+const TRUSTED_CONFIG_DIRS = [
+  ['.github', 'skills'],
+  ['.github', 'agents'],
+  ['.agents', 'skills'],
+  ['.claude', 'skills'],
+];
+
 /** `--add-dir` would load these as trusted; refuse a root an agent may have seeded. */
 export function hasTrustedConfig(root) {
-  return ['skills', 'agents'].some((d) => existsSync(join(root, '.github', d)));
+  return TRUSTED_CONFIG_DIRS.some((parts) => existsSync(join(root, ...parts)));
 }

@@ -179,20 +179,6 @@
               </span>
             </label>
 
-            <label class="field">
-              <span class="field-label">Secret environment variables</span>
-              <input
-                type="text"
-                name="secret_env_vars"
-                spellcheck="false"
-                placeholder="e.g. GITHUB_TOKEN, AWS_SECRET_ACCESS_KEY"
-              />
-              <span class="field-hint">
-                Names only, never values. These are stripped from the agent's shell environment and
-                redacted from its output.
-              </span>
-            </label>
-
             <div class="field">
               <span class="field-label">Always enforced</span>
               <ul class="locked-list" id="perm-locked"></ul>
@@ -203,6 +189,54 @@
                 Save permissions
               </button>
               <span class="save-note" id="permissions-note" aria-live="polite"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card" aria-labelledby="env-h">
+          <div class="card-head">
+            <h2 id="env-h">Environment variables</h2>
+            <span class="chip" id="env-summary"></span>
+          </div>
+          <form id="environment-form" class="form">
+            <label class="field">
+              <span class="field-label">Also pass these variables</span>
+              <input
+                type="text"
+                name="passed_env_vars"
+                spellcheck="false"
+                placeholder="e.g. JAVA_HOME, GOPATH, NVM_DIR"
+              />
+              <span class="field-hint">
+                Names only; the values come from the server's environment. Agents receive nothing
+                else, so add what their tools need.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Secret environment variables</span>
+              <input
+                type="text"
+                name="secret_env_vars"
+                spellcheck="false"
+                placeholder="e.g. AWS_SECRET_ACCESS_KEY"
+              />
+              <span class="field-hint">
+                Names only, never values. These are stripped from the agent's shell environment and
+                redacted from its output.
+              </span>
+            </label>
+
+            <div class="field">
+              <span class="field-label">Always passed</span>
+              <ul class="locked-list" id="env-locked"></ul>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="environment-save">
+                Save environment
+              </button>
+              <span class="save-note" id="environment-note" aria-live="polite"></span>
             </div>
           </form>
         </section>

@@ -21,13 +21,16 @@ export const DEFAULT_TOOL_IDS = AVAILABLE_TOOLS.filter((t) => !t.defaultOff).map
 /** Always denied. Additive with whatever the operator adds. */
 export const CORE_DENIED_COMMANDS = ['git push', 'gh', 'git remote'];
 
+/** The CLI may sign in with these, so they are passed, but always hidden from the agent's shell. */
+export const CORE_SECRET_ENV_VARS = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
+
 /** Shown read-only in the UI: true because of how the process is built. */
 export const ENFORCED_GUARANTEES = [
   'Each run gets a fresh throwaway workspace directory',
   'Git cannot see above the working directory (GIT_CEILING_DIRECTORIES)',
   'Built-in MCP servers are disabled',
   'The workspace is never trusted, so its skills, plugins and hooks never load',
-  'Agents may access the whole working directory, unless it contains .github/skills or agents',
+  'Agents may access the whole working directory, unless it contains agent skills (.github, .agents or .claude) or custom agents',
   'Blocked websites apply to web access and to shell commands such as curl',
 ];
 
@@ -59,6 +62,11 @@ export function effectiveDeniedCommands(denied) {
   return [...new Set([...CORE_DENIED_COMMANDS, ...parseList(denied)])];
 }
 
+/** Core secrets plus operator secrets, deduplicated. */
+export function effectiveSecretEnvVars(secrets) {
+  return [...new Set([...CORE_SECRET_ENV_VARS, ...parseList(secrets)])];
+}
+
 /**
  * Permission settings → CLI flags. Empty tool list falls back to the default tools.
  * URLs can only be denied: `--allow-all-tools` already permits every URL.
@@ -72,8 +80,7 @@ export function permissionArgs({ allowed_tools, denied_commands, blocked_urls, s
   }
   for (const url of parseList(blocked_urls)) args.push('--deny-url', url);
 
-  const secrets = parseList(secret_env_vars);
-  if (secrets.length > 0) args.push('--secret-env-vars', secrets.join(','));
+  args.push('--secret-env-vars', effectiveSecretEnvVars(secret_env_vars).join(','));
 
   return args;
 }

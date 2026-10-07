@@ -18,6 +18,7 @@ test('decodeSettings types every field and hands lists out as arrays', () => {
       allowed_tools: 'view,bash',
       denied_commands: '',
       secret_env_vars: 'A, B',
+      passed_env_vars: 'JAVA_HOME',
     },
     { defaultWorkspaceRoot: '/tmp/ws' },
   );
@@ -28,6 +29,14 @@ test('decodeSettings types every field and hands lists out as arrays', () => {
   assert.deepEqual(settings.allowed_tools, ['view', 'bash']);
   assert.deepEqual(settings.denied_commands, []);
   assert.deepEqual(settings.secret_env_vars, ['A', 'B']);
+  assert.deepEqual(settings.passed_env_vars, ['JAVA_HOME']);
+});
+
+test('passed env vars must be valid names', () => {
+  assert.deepEqual(validateSettings({ passed_env_vars: 'JAVA_HOME, GOPATH' }).values, {
+    passed_env_vars: 'JAVA_HOME,GOPATH',
+  });
+  assert.equal(validateSettings({ passed_env_vars: 'OK, 1BAD' }).errors.length, 1);
 });
 
 test('auto_dispatch is only true for the exact string "true"', () => {

@@ -24,7 +24,6 @@ export function render() {
   const form = $('permissions-form');
   form.elements.denied_commands.value = settings.denied_commands.join(', ');
   form.elements.blocked_urls.value = settings.blocked_urls.join(', ');
-  form.elements.secret_env_vars.value = settings.secret_env_vars.join(', ');
 
   $('perm-locked').innerHTML = [
     ...meta.core_denied_commands.map((c) => `<li><code>${esc(c)}</code> is always blocked</li>`),
@@ -47,7 +46,6 @@ export function mount() {
         allowed_tools: [...form.querySelectorAll('input[name="tool"]:checked')].map((i) => i.value),
         denied_commands: form.elements.denied_commands.value,
         blocked_urls: form.elements.blocked_urls.value,
-        secret_env_vars: form.elements.secret_env_vars.value,
       });
       state.settings = settings;
       render();

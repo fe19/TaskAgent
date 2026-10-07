@@ -1,5 +1,11 @@
 import { SETTING_SPEC } from '../domain/settings-schema.js';
-import { AVAILABLE_TOOLS, CORE_DENIED_COMMANDS, ENFORCED_GUARANTEES } from '../domain/permissions.js';
+import {
+  AVAILABLE_TOOLS,
+  CORE_DENIED_COMMANDS,
+  CORE_SECRET_ENV_VARS,
+  ENFORCED_GUARANTEES,
+} from '../domain/permissions.js';
+import { PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
 import { resultFileName, resultMarkdown } from '../domain/result-document.js';
 import { notFound } from '../errors.js';
 import { presentAgent, presentRun, presentTask } from '../presenters.js';
@@ -22,6 +28,11 @@ export function registerRoutes(router, { actions, settings, tasks, runs, schedul
         tools: AVAILABLE_TOOLS,
         core_denied_commands: CORE_DENIED_COMMANDS,
         enforced: ENFORCED_GUARANTEES,
+      },
+      environment: {
+        passed: PASSED_ENV_VARS,
+        passed_prefixes: PASSED_ENV_PREFIXES,
+        core_secrets: CORE_SECRET_ENV_VARS,
       },
     }))
     .put('/api/settings', ({ body }) => ({ settings: actions.updateSettings(body) }))

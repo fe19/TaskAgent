@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentRun } from '../../src/agents/agent-run.js';
@@ -73,6 +73,22 @@ test('the run works inside its own scratch workspace', async () => {
 
   assert.ok(h.run.workspace.includes(`task-${h.task.id}-`));
   assert.ok(existsSync(join(h.run.workspace, 'out.txt')), 'the fake CLI wrote into the workspace');
+  h.cleanup();
+});
+
+test('the agent process gets only allow-listed and operator-added variables', async () => {
+  process.env.ACR_TEST_PASSED = 'yes';
+  process.env.ACR_TEST_HIDDEN = 'no';
+  const h = harness({ settings: { passed_env_vars: ['ACR_TEST_PASSED'] } });
+  h.run.start();
+  await h.run.exited;
+  delete process.env.ACR_TEST_PASSED;
+  delete process.env.ACR_TEST_HIDDEN;
+
+  const names = JSON.parse(readFileSync(join(h.run.workspace, 'env-names.json'), 'utf8'));
+  assert.ok(names.includes('ACR_TEST_PASSED'));
+  assert.ok(names.includes('PATH'));
+  assert.ok(!names.includes('ACR_TEST_HIDDEN'));
   h.cleanup();
 });
 

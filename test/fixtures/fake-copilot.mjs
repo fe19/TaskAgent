@@ -7,7 +7,7 @@
  * Behaviour is driven by markers in the prompt:
  *   HANG  -> never exits (exercises the max-runtime kill path)
  *   FAIL  -> writes to stderr and exits 1
- * FAKE_COPILOT_DELAY_MS delays the normal path (keeps runs visible in UI checks).
+ * COPILOT_FAKE_DELAY_MS delays the normal path (keeps runs visible in UI checks).
  *   otherwise -> emits a normal successful sequence and exits 0
  */
 import { writeFileSync } from 'node:fs';
@@ -55,7 +55,7 @@ if (prompt.includes('HANG')) {
   process.stderr.write('fake-copilot: simulated failure\n');
   process.exit(1);
 } else {
-  await new Promise((r) => setTimeout(r, Number(process.env.FAKE_COPILOT_DELAY_MS) || 0));
+  await new Promise((r) => setTimeout(r, Number(process.env.COPILOT_FAKE_DELAY_MS) || 0));
   emit('assistant.reasoning', { content: 'I will create the requested file. Then I will stop.' });
   emit('tool.execution_start', {
     toolCallId: 't1',
@@ -65,6 +65,8 @@ if (prompt.includes('HANG')) {
     model,
   });
   writeFileSync(`${process.cwd()}/out.txt`, 'hello\n');
+  // Names only, so tests can check what the agent's environment holds.
+  writeFileSync(`${process.cwd()}/env-names.json`, JSON.stringify(Object.keys(process.env)));
   emit('tool.execution_complete', {
     toolCallId: 't1',
     success: true,

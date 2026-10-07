@@ -1,4 +1,5 @@
 import { permissionArgs } from '../domain/permissions.js';
+import { agentEnvironment } from '../domain/environment.js';
 
 /** Copilot CLI adapter: argv, env and JSONL events. Swap this file to support another agent backend. */
 
@@ -40,10 +41,14 @@ export function buildArgs({
   return args;
 }
 
-/** `GIT_CEILING_DIRECTORIES` stops agent `git` from finding the parent repository. */
-export function buildEnv({ workspaceRoot }) {
+/**
+ * Only allow-listed variables (domain/environment.js) reach the agent: cloud keys, the SSH
+ * agent and the like stay out of its shell. `GIT_CEILING_DIRECTORIES` stops agent `git`
+ * from finding the parent repository.
+ */
+export function buildEnv({ workspaceRoot, passedEnvVars = [], env = process.env }) {
   return {
-    ...process.env,
+    ...agentEnvironment(env, passedEnvVars),
     // '1', never 'true': 'true' also trusts the (agent-writable) workspace.
     COPILOT_ALLOW_ALL: '1',
     NO_COLOR: '1',

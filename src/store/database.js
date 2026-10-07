@@ -88,6 +88,8 @@ export const DEFAULT_SETTINGS = {
   denied_commands: '',
   blocked_urls: '',
   secret_env_vars: '',
+  // Only the allow-list in domain/environment.js reaches agents unless named here.
+  passed_env_vars: '',
 };
 
 export function openDatabase(file) {

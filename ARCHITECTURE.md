@@ -47,4 +47,4 @@ On boot, runs left live by a previous process become `interrupted`, and their ta
 
 ## Tests
 
-`npm test` runs offline against `fake-copilot.mjs`. Prompt markers set its behavior: `HANG`, `FAIL`, `REJECT_EFFORT`. `FAKE_COPILOT_DELAY_MS` delays normal runs.
+`npm test` runs offline against `fake-copilot.mjs`. Prompt markers set its behavior: `HANG`, `FAIL`, `REJECT_EFFORT`. `COPILOT_FAKE_DELAY_MS` delays normal runs.

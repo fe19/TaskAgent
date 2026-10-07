@@ -118,7 +118,6 @@ async function permissions(page) {
 
     form.querySelector('input[value="bash"]').checked = false;
     form.elements.denied_commands.value = 'curl, wget';
-    form.elements.secret_env_vars.value = 'GITHUB_TOKEN';
     form.requestSubmit();
     await wait(1200);
     const saved = await settings();
@@ -128,7 +127,6 @@ async function permissions(page) {
     // Restore before the agent run; the grid re-renders on save, so re-query.
     for (const b of form.querySelectorAll('input[name="tool"]')) b.checked = true;
     form.elements.denied_commands.value = '';
-    form.elements.secret_env_vars.value = '';
     form.requestSubmit();
     await wait(1200);
     const restored = await settings();
@@ -146,9 +144,9 @@ async function permissions(page) {
     `allowed=${p.saved.allowed_tools.join(',')} · summary="${p.summary}"`,
   );
   check(
-    'blocked commands and secret env vars save from the UI',
-    p.saved.denied_commands.join(',') === 'curl,wget' && p.saved.secret_env_vars.join(',') === 'GITHUB_TOKEN',
-    `denied=${p.saved.denied_commands.join('|')} secrets=${p.saved.secret_env_vars.join('|')}`,
+    'blocked commands save from the UI',
+    p.saved.denied_commands.join(',') === 'curl,wget',
+    `denied=${p.saved.denied_commands.join('|')}`,
   );
   check(
     'the always-enforced list shows guardrails the operator cannot remove',
@@ -159,6 +157,43 @@ async function permissions(page) {
     'permissions can be restored, so the section is not one-way',
     p.restored.allowed_tools.length === p.toolCount && p.restored.denied_commands.length === 0,
     `allowed=${p.restored.allowed_tools.join(',')}`,
+  );
+}
+
+async function environment(page) {
+  const e = await inPage(page, async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const settings = async () => (await (await fetch('/api/settings')).json()).settings;
+    const form = document.getElementById('environment-form');
+    const locked = document.getElementById('env-locked').textContent;
+
+    form.elements.passed_env_vars.value = 'JAVA_HOME, GOPATH';
+    form.elements.secret_env_vars.value = 'AWS_SECRET_ACCESS_KEY';
+    form.requestSubmit();
+    await wait(1200);
+    const saved = await settings();
+    const summary = document.getElementById('env-summary').textContent.trim();
+
+    form.elements.passed_env_vars.value = '';
+    form.elements.secret_env_vars.value = '';
+    form.requestSubmit();
+    await wait(1200);
+    return { locked, saved, summary, restored: await settings() };
+  });
+  check(
+    'passed and secret env vars save from the environment section',
+    e.saved.passed_env_vars.join(',') === 'JAVA_HOME,GOPATH' && e.saved.secret_env_vars.join(',') === 'AWS_SECRET_ACCESS_KEY',
+    `passed=${e.saved.passed_env_vars.join('|')} secrets=${e.saved.secret_env_vars.join('|')} · summary="${e.summary}"`,
+  );
+  check(
+    'the environment section lists what is always passed and always secret',
+    ['PATH', 'COPILOT_', 'GH_TOKEN'].every((n) => e.locked.includes(n)),
+    e.locked.slice(0, 80),
+  );
+  check(
+    'environment settings can be cleared again',
+    e.restored.passed_env_vars.length === 0 && e.restored.secret_env_vars.length === 0,
+    `passed=${e.restored.passed_env_vars.length} secrets=${e.restored.secret_env_vars.length}`,
   );
 }
 
@@ -573,7 +608,7 @@ let failed = 1;
 try {
   page = await openPage({ port: browser.port, url: APP });
   await sleep(3500);
-  for (const section of [topbar, settingsForm, permissions, queueing, liveRun, finishedRun, responsive]) {
+  for (const section of [topbar, settingsForm, permissions, environment, queueing, liveRun, finishedRun, responsive]) {
     await section(page);
   }
   failed = checks.filter((c) => !c.ok).length;

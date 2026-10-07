@@ -6,6 +6,7 @@ export const state = {
   settings: null,
   spec: null,
   permissionMeta: null,
+  environmentMeta: null,
   loaded: false,
   openRunId: null,
   dragging: null,
