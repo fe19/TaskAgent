@@ -6,6 +6,7 @@ import { createApp } from '../../src/http/server.js';
 import { tempDir, removeDir, waitFor } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_CLAUDE = fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url));
 const FAKE_GH = fileURLToPath(new URL('../fixtures/fake-gh.mjs', import.meta.url));
 
 /** Boots the whole application on an ephemeral port, as a client would meet it. */
@@ -15,6 +16,7 @@ async function boot() {
     dbFile: ':memory:',
     workspaceRoot: join(root, 'workspaces'),
     copilotBin: FAKE_CLI,
+    claudeBin: FAKE_CLAUDE,
     ghBin: FAKE_GH,
     usageRetries: 1,
     readUsage: () => null,
@@ -79,7 +81,8 @@ test('settings come with the spec and permission catalogue the UI renders from',
   assert.ok(body.permissions.core_denied_commands.includes('git push'));
   assert.ok(body.permissions.enforced.length > 0);
   assert.ok(body.environment.passed.includes('PATH'));
-  assert.ok(body.environment.passed_prefixes.includes('COPILOT_'));
+  assert.ok(body.environment.by_assistant.copilot.prefixes.includes('COPILOT_'));
+  assert.ok(body.environment.by_assistant['claude-code'].prefixes.includes('ANTHROPIC_'));
   assert.ok(body.environment.core_secrets.includes('GH_TOKEN'));
   assert.deepEqual(body.settings.passed_env_vars, []);
   await h.cleanup();
@@ -304,6 +307,25 @@ test('the agents overview reports every run with its status and capacity', async
   assert.ok(agent.started_at && agent.finished_at);
   assert.equal(typeof body.capacity, 'number');
   assert.ok(body.settings, 'the board can render without a second request');
+  await h.cleanup();
+});
+
+test('switching the assistant to Claude Code runs the next task with it, with its reported cost', async () => {
+  const h = await boot();
+  const saved = await h.put('/api/settings', { assistant: 'claude-code', claude_model: 'haiku' });
+  assert.equal(saved.status, 200);
+  assert.equal((await h.get('/api/settings')).body.permissions.enforced.some((g) => /curl can still reach/.test(g)), true);
+
+  await h.post('/api/tasks', { prompt: 'Say hello' });
+  await h.put('/api/dispatch', { running: true });
+  await waitFor(async () => (await h.get('/api/agents')).body.agents[0]?.usage);
+
+  const [agent] = (await h.get('/api/agents')).body.agents;
+  assert.equal(agent.status, 'succeeded');
+  assert.equal(agent.assistant, 'claude-code');
+  assert.equal(agent.model, 'haiku');
+  assert.equal(agent.usage.cost_usd, 0.0421);
+  assert.equal(agent.usage.aiu, null);
   await h.cleanup();
 });
 

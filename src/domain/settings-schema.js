@@ -29,6 +29,24 @@ export const SETTING_SPEC = {
     type: 'enum',
     values: ['default', 'none', 'minimal', 'low', 'medium', 'high'],
   },
+  // Claude Code's own model and effort; `model`/`reasoning_effort` above are Copilot's.
+  claude_model: {
+    type: 'enum',
+    values: [
+      'sonnet',
+      'opus',
+      'haiku',
+      'fable',
+      'claude-sonnet-5-5',
+      'claude-opus-5-5',
+      'claude-haiku-4-5-20251001',
+      'claude-fable-5-1',
+    ],
+  },
+  claude_effort: {
+    type: 'enum',
+    values: ['default', 'low', 'medium', 'high', 'xhigh', 'max'],
+  },
   auto_dispatch: { type: 'bool' },
   usd_per_aic: { type: 'decimal', min: 0, max: 100 },
   workspace_root: { type: 'path' },
@@ -52,6 +70,8 @@ export function decodeSettings(raw, { defaultWorkspaceRoot }) {
     max_runtime_minutes: Number(raw.max_runtime_minutes),
     model: raw.model,
     reasoning_effort: raw.reasoning_effort,
+    claude_model: raw.claude_model,
+    claude_effort: raw.claude_effort,
     auto_dispatch: raw.auto_dispatch === 'true',
     workspace_root: raw.workspace_root || defaultWorkspaceRoot,
     usd_per_aic: Number(raw.usd_per_aic ?? DEFAULT_USD_PER_AIC),

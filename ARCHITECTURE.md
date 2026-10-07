@@ -14,10 +14,10 @@ src/
 ├── config.js, events.js   env config, event bus
 ├── domain/                pure rules — also served to the browser at /domain/
 ├── store/                 all SQL, plus read-only Copilot usage and quota (via gh) readers
-├── agents/                spawning: CLI adapter, run lifecycle, scheduler, workspaces, CPU/RAM sampling
+├── agents/                spawning: CLI adapters, run lifecycle, scheduler, workspaces, CPU/RAM sampling
 └── http/                  server, router, routes, SSE, static files
 web/                       browser UI: main.js composes views/, store.js holds state
-test/                      mirrors src/; fixtures/fake-copilot.mjs and fake-gh.mjs stand in for the CLIs
+test/                      mirrors src/; fixtures/fake-copilot.mjs, fake-claude.mjs and fake-gh.mjs stand in for the CLIs
 scripts/verify-ui.mjs      end-to-end check in headless Chrome
 ```
 
@@ -29,7 +29,8 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 
 - `domain/` does no I/O.
 - Only `store/` contains SQL.
-- Only `agents/copilot-cli.js` knows the CLI's argv and event format.
+- Only the adapters (`agents/copilot-cli.js`, `agents/claude-cli.js`) know a CLI's argv, environment and event format.
+- `AgentRun` drives whichever adapter `agents/assistants.js` returns for the `assistant` setting; the scheduler reads it when a task starts.
 - Dependencies are passed in by `control-room.js`, so each layer is testable alone.
 
 ## Extending
@@ -37,14 +38,14 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 - **New UI** (e.g. the planned terminal): call `createControlRoom()` and use `room.actions`, `room.bus` and `presenters`. Only one UI process may run per database.
 - **New operation:** add it to `actions.js`, then expose it in `http/routes.js` (and any other UI).
 - **New setting:** add it to `SETTING_SPEC` (`domain/settings-schema.js`) and `DEFAULT_SETTINGS` (`store/database.js`).
-- **New agent backend:** write a sibling of `agents/copilot-cli.js`.
+- **New agent backend:** write a sibling of `agents/claude-cli.js` exporting an adapter (`id`, `binOption`, `defaultBin`, `pollsUsage`, `model(settings)`, `effort(settings)`, `buildArgs`, `buildEnv`, `parseEvent`, `interpret`, optional `rejectsEffort`), register it in `agents/assistants.js`, list it in `domain/assistants.js`, give it its environment in `domain/environment.js` and its guarantees in `domain/permissions.js`. `interpret(evt)` returns `{ activities, toolCalls, message, result, usage, error }`; return `usage` from the event if the CLI reports it, otherwise set `pollsUsage` and read it after exit.
 
 ## Data
 
-`settings`, `tasks`, `runs`, `run_events`, `run_usage` (see `store/database.js`).
+`settings`, `tasks`, `runs` (with the `assistant` that ran it), `run_events`, `run_usage` (`nano_aiu` for Copilot, `cost_usd` for Claude Code) — see `store/database.js`. New columns are added on boot by `addColumn`.
 
 On boot, runs left live by a previous process become `interrupted`, and their tasks are requeued.
 
 ## Tests
 
-`npm test` runs offline against `fake-copilot.mjs`. Prompt markers set its behavior: `HANG`, `FAIL`, `REJECT_EFFORT`. `COPILOT_FAKE_DELAY_MS` delays normal runs.
+`npm test` runs offline against `fake-copilot.mjs` and `fake-claude.mjs`. Prompt markers set their behavior: `HANG`, `FAIL`, plus `REJECT_EFFORT` (Copilot) and `ERROR_RESULT` (Claude Code). `COPILOT_FAKE_DELAY_MS` / `CLAUDE_CODE_FAKE_DELAY_MS` delay normal runs.

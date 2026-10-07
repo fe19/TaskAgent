@@ -1,6 +1,10 @@
 import { esc, elapsedMs, formatDuration, formatUsd } from '../format.js';
-import { aicToUsd } from '../store.js';
+import { usageUsd } from '../store.js';
 import { isLive, resultLabel } from '/domain/run-status.js';
+import { ASSISTANTS } from '/domain/assistants.js';
+
+const assistantName = (id) => ASSISTANTS.find((a) => a.id === id)?.name ?? id;
+const isClaude = (run) => run.assistant === 'claude-code';
 
 const rows = (pairs) =>
   `<dl class="kv">${pairs
@@ -19,6 +23,7 @@ function renderFacts(run, live) {
       'Status',
       `<span class="badge" data-status="${esc(run.status)}">${esc(run.status.replace('_', ' '))}</span>`,
     ],
+    ['Assistant', esc(assistantName(run.assistant))],
     ['Model', esc(run.model)],
     [
       'Elapsed',
@@ -28,7 +33,7 @@ function renderFacts(run, live) {
     ['Runtime limit', `${esc(run.max_runtime_s / 60)} min`],
     ['Tool calls', esc(run.tool_calls)],
     ['Workspace', code(run.workspace_dir)],
-    ['Copilot session', code(run.session_id)],
+    [`${isClaude(run) ? 'Claude Code' : 'Copilot'} session`, code(run.session_id)],
     run.exit_code == null ? null : ['Exit code', esc(run.exit_code)],
   ]);
 }
@@ -38,8 +43,8 @@ function renderUsage(run) {
   if (!u) {
     return note(
       run.usage_state === 'pending'
-        ? 'Not reported yet — the Copilot CLI records usage when the run finishes.'
-        : 'The Copilot CLI did not report token usage for this session.',
+        ? `Not reported yet — ${isClaude(run) ? 'Claude Code' : 'the Copilot CLI'} reports usage when the run finishes.`
+        : `${isClaude(run) ? 'Claude Code' : 'The Copilot CLI'} did not report token usage for this session.`,
     );
   }
   const count = (n) => esc(n.toLocaleString());
@@ -51,8 +56,12 @@ function renderUsage(run) {
     ['Total', `<strong>${count(u.total_tokens)}</strong>`],
     ['API calls', esc(u.api_calls)],
     ['Model time', `${count(u.api_duration_ms)} ms`],
-    ['AI Credits (AIC)', u.aiu == null ? 'unavailable' : esc(u.aiu.toFixed(4))],
-    ['Cost (USD)', esc(formatUsd(aicToUsd(u.aiu)) ?? 'unavailable')],
+    isClaude(run) ? null : ['AI Credits (AIC)', u.aiu == null ? 'unavailable' : esc(u.aiu.toFixed(4))],
+    [
+      isClaude(run) ? 'Cost (USD, reported)' : 'Cost (USD)',
+      esc(formatUsd(usageUsd(u)) ?? 'unavailable'),
+      isClaude(run) ? ' title="Reported by Claude Code at API prices; on a subscription it is an estimate, not a charge."' : '',
+    ],
   ]);
 }
 

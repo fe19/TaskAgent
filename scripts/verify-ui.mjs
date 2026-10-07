@@ -107,6 +107,49 @@ async function settingsForm(page) {
   );
 }
 
+async function assistantSwitch(page) {
+  const a = await inPage(page, async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const f = document.getElementById('settings-form');
+    const visible = (name) => !f.elements[name].closest('.field').hidden;
+    const select = f.elements.assistant;
+    const options = [...select.options].map((o) => ({ id: o.value, disabled: o.disabled }));
+
+    select.value = 'claude-code';
+    select.dispatchEvent(new Event('change'));
+    const claudeShown = visible('claude_model') && visible('claude_effort') && !visible('model') && !visible('usd_per_aic');
+    f.elements.claude_model.value = 'opus';
+    f.requestSubmit();
+    await wait(1200);
+    const res = await (await fetch('/api/settings')).json();
+    const enforced = [...document.querySelectorAll('#perm-locked li')].map((li) => li.textContent);
+
+    select.value = 'copilot';
+    select.dispatchEvent(new Event('change'));
+    const copilotShown = visible('model') && !visible('claude_model');
+    f.requestSubmit();
+    await wait(1200);
+    const restored = (await (await fetch('/api/settings')).json()).settings.assistant;
+    return { options, claudeShown, copilotShown, saved: res.settings, enforced, restored };
+  });
+  check(
+    'Claude Code is selectable; Codex is still preview',
+    a.options.some((o) => o.id === 'claude-code' && !o.disabled) && a.options.some((o) => o.id === 'codex' && o.disabled),
+    a.options.map((o) => `${o.id}${o.disabled ? ' (disabled)' : ''}`).join(', '),
+  );
+  check(
+    'switching the assistant shows only its model and effort fields',
+    a.claudeShown && a.copilotShown,
+    `claude fields=${a.claudeShown} copilot fields=${a.copilotShown}`,
+  );
+  check(
+    'the Claude Code choice saves and the enforced list follows it',
+    a.saved.assistant === 'claude-code' && a.saved.claude_model === 'opus' && a.enforced.some((g) => g.includes('curl can still reach')),
+    `${a.saved.assistant} · ${a.saved.claude_model}`,
+  );
+  check('the assistant is switched back to Copilot', a.restored === 'copilot', a.restored);
+}
+
 async function permissions(page) {
   const p = await inPage(page, async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -608,7 +651,7 @@ let failed = 1;
 try {
   page = await openPage({ port: browser.port, url: APP });
   await sleep(3500);
-  for (const section of [topbar, settingsForm, permissions, environment, queueing, liveRun, finishedRun, responsive]) {
+  for (const section of [topbar, settingsForm, assistantSwitch, permissions, environment, queueing, liveRun, finishedRun, responsive]) {
     await section(page);
   }
   failed = checks.filter((c) => !c.ok).length;

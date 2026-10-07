@@ -11,6 +11,7 @@ export function loadConfig(overrides = {}) {
     // Normally a runtime setting; tests pin it here.
     workspaceRoot: undefined,
     copilotBin: process.env.COPILOT_BIN || 'copilot',
+    claudeBin: process.env.CLAUDE_BIN || 'claude',
     ghBin: process.env.GH_BIN || 'gh',
     ...overrides,
   };

@@ -48,7 +48,7 @@ export function buildArgs({
  */
 export function buildEnv({ workspaceRoot, passedEnvVars = [], env = process.env }) {
   return {
-    ...agentEnvironment(env, passedEnvVars),
+    ...agentEnvironment(env, { assistant: 'copilot', extra: passedEnvVars }),
     // '1', never 'true': 'true' also trusts the (agent-writable) workspace.
     COPILOT_ALLOW_ALL: '1',
     NO_COLOR: '1',
@@ -139,3 +139,37 @@ function truncate(s, n) {
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/**
+ * The adapter interface `AgentRun` drives. `interpret` turns one event into the facts a run
+ * tracks: `activities` for the timeline, `toolCalls` started, the latest `message`, the
+ * `result` metrics, and `usage` when the event itself carries it (Copilot's never does).
+ */
+export const copilotAdapter = {
+  id: 'copilot',
+  binOption: 'copilotBin',
+  defaultBin: 'copilot',
+  // Token usage lands in the CLI's session store after exit (store/copilot-usage.js).
+  pollsUsage: true,
+  model: (settings) => settings.model,
+  effort: (settings) => settings.reasoning_effort,
+  buildArgs,
+  buildEnv,
+  parseEvent,
+
+  interpret(evt) {
+    const out = {};
+    const summary = summarizeEvent(evt);
+    if (summary?.summary) out.activities = [{ kind: summary.kind, summary: summary.summary }];
+    if (evt.type === 'tool.execution_start') out.toolCalls = 1;
+    if (evt.type === 'assistant.message') {
+      const text = typeof evt.data?.content === 'string' ? evt.data.content.trim() : '';
+      if (text) out.message = text;
+    }
+    if (evt.type === 'result') out.result = readResultMetrics(evt);
+    return out;
+  },
+
+  /** Some models reject an explicit reasoning effort; retry once without it. */
+  rejectsEffort: isReasoningEffortRejection,
+};

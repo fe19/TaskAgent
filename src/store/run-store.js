@@ -8,9 +8,9 @@ const EVENT_LIMIT = 100;
 export function createRunStore({ db }) {
   const statements = {
     insert: db.prepare(
-      `INSERT INTO runs (task_id, session_id, workspace_dir, model, max_runtime_s,
+      `INSERT INTO runs (task_id, session_id, assistant, workspace_dir, model, max_runtime_s,
                          status, current_activity)
-       VALUES (?, ?, ?, ?, ?, 'starting', 'Launching agent')`,
+       VALUES (?, ?, ?, ?, ?, ?, 'starting', 'Launching agent')`,
     ),
     markRunning: db.prepare("UPDATE runs SET pid = ?, status = 'running' WHERE id = ?"),
     setActivity: db.prepare('UPDATE runs SET current_activity = ? WHERE id = ?'),
@@ -59,24 +59,26 @@ export function createRunStore({ db }) {
     saveUsage: db.prepare(
       `INSERT INTO run_usage (run_id, model, api_calls, input_tokens, output_tokens,
                               cache_read_tokens, cache_write_tokens, reasoning_tokens,
-                              nano_aiu, api_duration_ms, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                              nano_aiu, cost_usd, api_duration_ms, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(run_id) DO UPDATE SET
          model = excluded.model, api_calls = excluded.api_calls,
          input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens,
          cache_read_tokens = excluded.cache_read_tokens,
          cache_write_tokens = excluded.cache_write_tokens,
          reasoning_tokens = excluded.reasoning_tokens,
-         nano_aiu = excluded.nano_aiu, api_duration_ms = excluded.api_duration_ms,
+         nano_aiu = excluded.nano_aiu, cost_usd = excluded.cost_usd,
+         api_duration_ms = excluded.api_duration_ms,
          synced_at = datetime('now')`,
     ),
   };
 
   return {
-    create({ taskId, sessionId, workspaceDir, model, maxRuntimeSeconds }) {
+    create({ taskId, sessionId, assistant = 'copilot', workspaceDir, model, maxRuntimeSeconds }) {
       const { lastInsertRowid } = statements.insert.run(
         taskId,
         sessionId,
+        assistant,
         workspaceDir,
         model,
         maxRuntimeSeconds,
@@ -120,7 +122,7 @@ export function createRunStore({ db }) {
 
     saveUsage(runId, usage) {
       if (!usage) return false;
-      // A field the Copilot store did not report stays NULL; it never becomes 0.
+      // A field the CLI did not report stays NULL; it never becomes 0.
       const value = (key) => usage[key] ?? null;
       statements.saveUsage.run(
         runId,
@@ -132,6 +134,7 @@ export function createRunStore({ db }) {
         value('cache_write_tokens'),
         value('reasoning_tokens'),
         value('nano_aiu'),
+        value('cost_usd'),
         value('api_duration_ms'),
       );
       return true;

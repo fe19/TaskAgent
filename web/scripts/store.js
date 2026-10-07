@@ -38,6 +38,15 @@ export const aicToUsd = (aic) => {
   return aic == null || rate == null ? null : aic * rate;
 };
 
+/** Claude Code reports its cost; a Copilot run is priced from its AI Credits. */
+export const usageUsd = (usage) => (usage?.cost_usd != null ? usage.cost_usd : aicToUsd(usage?.aiu));
+
+export const reportedUsd = () => reportedSum(usageUsd);
+
+/** The model the next run will use, which depends on the selected assistant. */
+export const currentModel = () =>
+  state.settings?.assistant === 'claude-code' ? state.settings.claude_model : state.settings?.model;
+
 function reportedSum(pick) {
   // No usage reports means unknown, not zero.
   const values = state.agents.map((a) => (a.usage ? pick(a.usage) : null)).filter((v) => v != null);

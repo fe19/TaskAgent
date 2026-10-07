@@ -1,4 +1,5 @@
 import { AgentRun } from './agent-run.js';
+import { adapterFor } from './assistants.js';
 
 /**
  * Runs up to `max_concurrent_agents` agents. Auto mode (`auto_dispatch`) pulls from the queue;
@@ -63,18 +64,9 @@ export class Scheduler {
   }
 
   #launch(task, settings) {
-    const run = new AgentRun({
-      runs: this.runs,
-      tasks: this.tasks,
-      bus: this.bus,
-      task,
-      settings,
-      ...this.agentOptions,
-      // An explicit root (tests) wins; otherwise follow the live setting.
-      workspaceRoot: this.agentOptions.workspaceRoot ?? settings.workspace_root,
-    });
-
+    let run;
     try {
+      run = this.#createRun(task, settings);
       run.start();
     } catch (err) {
       // Spawn failed outright (e.g. the binary is missing): do not strand the task.
@@ -92,6 +84,21 @@ export class Scheduler {
     });
     run.exited.then(() => this.syncing.delete(run));
     return run;
+  }
+
+  /** The assistant is read when the task starts, so a switch applies to the next run. */
+  #createRun(task, settings) {
+    return new AgentRun({
+      runs: this.runs,
+      tasks: this.tasks,
+      bus: this.bus,
+      task,
+      settings,
+      adapter: adapterFor(settings.assistant),
+      ...this.agentOptions,
+      // An explicit root (tests) wins; otherwise follow the live setting.
+      workspaceRoot: this.agentOptions.workspaceRoot ?? settings.workspace_root,
+    });
   }
 
   stopRun(runId, reason = 'cancelled') {

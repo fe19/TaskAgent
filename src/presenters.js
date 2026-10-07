@@ -14,6 +14,8 @@ function presentUsage(usage) {
     total_tokens:
       usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens,
     aiu: nanoAiuToAiu(usage.nano_aiu),
+    // Reported by Claude Code; Copilot runs are priced from AI Credits in the browser.
+    cost_usd: usage.cost_usd ?? null,
     api_duration_ms: usage.api_duration_ms,
     model: usage.model,
   };
@@ -36,6 +38,7 @@ export function presentRun(run, usage) {
     task_title: run.task_title,
     task_prompt: run.task_prompt,
     session_id: run.session_id,
+    assistant: run.assistant,
     status: run.status,
     model: run.model,
     current_activity: run.current_activity,

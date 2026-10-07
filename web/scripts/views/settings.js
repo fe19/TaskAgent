@@ -9,6 +9,8 @@ const FIELDS = [
   'max_runtime_minutes',
   'model',
   'reasoning_effort',
+  'claude_model',
+  'claude_effort',
   'usd_per_aic',
   'workspace_root',
 ];
@@ -18,6 +20,13 @@ function fillSelect(select, values, selected) {
   select.innerHTML = values
     .map((v) => `<option value="${esc(v)}"${v === selected ? ' selected' : ''}>${esc(v)}</option>`)
     .join('');
+}
+
+/** Shows only the fields of the selected assistant; hidden ones still save their values. */
+function showAssistantFields(assistant) {
+  for (const field of document.querySelectorAll('#settings-form [data-assistant]')) {
+    field.hidden = field.dataset.assistant !== assistant;
+  }
 }
 
 function fillAssistants(select, options, selected) {
@@ -37,6 +46,9 @@ export function render() {
   fillAssistants($('assistant-select'), spec.assistant.options, settings.assistant);
   fillSelect($('model-select'), spec.model.values, settings.model);
   fillSelect($('effort-select'), spec.reasoning_effort.values, settings.reasoning_effort);
+  fillSelect($('claude-model-select'), spec.claude_model.values, settings.claude_model);
+  fillSelect($('claude-effort-select'), spec.claude_effort.values, settings.claude_effort);
+  showAssistantFields(settings.assistant);
 
   const form = $('settings-form');
   form.elements.max_concurrent_agents.value = settings.max_concurrent_agents;
@@ -45,8 +57,9 @@ export function render() {
   form.elements.workspace_root.value = settings.workspace_root;
 }
 
-export function mount({ refresh }) {
+export function mount({ refresh, reloadSettings }) {
   const form = $('settings-form');
+  $('assistant-select').addEventListener('change', (event) => showAssistantFields(event.target.value));
   form.addEventListener(
     'submit',
     withButton($('settings-save'), async (event) => {
@@ -62,6 +75,8 @@ export function mount({ refresh }) {
       // Show the normalized path the server stored.
       form.elements.workspace_root.value = settings.workspace_root;
       flashNote('settings-note');
+      // The enforced guarantees and queued tiles follow the assistant.
+      await reloadSettings();
       await refresh();
     }),
   );

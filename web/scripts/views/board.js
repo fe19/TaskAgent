@@ -8,7 +8,8 @@ import {
   strandedTasks,
   reportedTokens,
   reportedAic,
-  aicToUsd,
+  reportedUsd,
+  currentModel,
 } from '../store.js';
 import { esc, formatNumber, formatUsd } from '../format.js';
 import { queuedTile, runTile, strandedTile } from './tiles.js';
@@ -26,7 +27,7 @@ export function render() {
     return;
   }
 
-  const queuedOpts = { model: state.settings?.model, manual: !isAutoDispatch() };
+  const queuedOpts = { model: currentModel(), assistant: state.settings?.assistant, manual: !isAutoDispatch() };
   fillLane('queued', queuedTasks().map((task) => queuedTile(task, queuedOpts)), 'Nothing queued.');
   fillLane('running', live.map((run) => runTile(run)), 'No agents working.');
   fillLane(
@@ -58,7 +59,7 @@ export function renderStats() {
   // Unknown usage is shown as n/a, not zero.
   $('stat-tokens').textContent = tokens == null ? 'n/a' : formatNumber(tokens);
   $('stat-aic').textContent = aic == null ? 'n/a' : aic.toFixed(aic >= 100 ? 0 : 2);
-  $('stat-usd').textContent = formatUsd(aicToUsd(aic)) ?? 'n/a';
+  $('stat-usd').textContent = formatUsd(reportedUsd()) ?? 'n/a';
 }
 
 function fillLane(name, tiles, emptyText) {

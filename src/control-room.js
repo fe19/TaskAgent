@@ -31,6 +31,7 @@ export function createControlRoom(overrides = {}) {
     bus,
     agentOptions: {
       copilotBin: config.copilotBin,
+      claudeBin: config.claudeBin,
       workspaceRoot: config.workspaceRoot,
       usageRetries: config.usageRetries,
       readUsage: config.readUsage,

@@ -3,9 +3,9 @@ import {
   AVAILABLE_TOOLS,
   CORE_DENIED_COMMANDS,
   CORE_SECRET_ENV_VARS,
-  ENFORCED_GUARANTEES,
+  enforcedGuarantees,
 } from '../domain/permissions.js';
-import { PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
+import { ASSISTANT_ENV, PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
 import { resultFileName, resultMarkdown } from '../domain/result-document.js';
 import { notFound } from '../errors.js';
 import { presentAgent, presentRun, presentTask } from '../presenters.js';
@@ -21,20 +21,25 @@ export function registerRoutes(router, { actions, settings, tasks, runs, schedul
     .get('/api/resources', () => resources.sample())
     .get('/api/quota', () => quota.read())
 
-    .get('/api/settings', () => ({
-      settings: settings.read(),
-      spec: SETTING_SPEC,
-      permissions: {
-        tools: AVAILABLE_TOOLS,
-        core_denied_commands: CORE_DENIED_COMMANDS,
-        enforced: ENFORCED_GUARANTEES,
-      },
-      environment: {
-        passed: PASSED_ENV_VARS,
-        passed_prefixes: PASSED_ENV_PREFIXES,
-        core_secrets: CORE_SECRET_ENV_VARS,
-      },
-    }))
+    .get('/api/settings', () => {
+      const current = settings.read();
+      return {
+        settings: current,
+        spec: SETTING_SPEC,
+        permissions: {
+          tools: AVAILABLE_TOOLS,
+          core_denied_commands: CORE_DENIED_COMMANDS,
+          // Some guarantees depend on what the selected assistant's CLI can enforce.
+          enforced: enforcedGuarantees(current.assistant),
+        },
+        environment: {
+          passed: PASSED_ENV_VARS,
+          passed_prefixes: PASSED_ENV_PREFIXES,
+          by_assistant: ASSISTANT_ENV,
+          core_secrets: CORE_SECRET_ENV_VARS,
+        },
+      };
+    })
     .put('/api/settings', ({ body }) => ({ settings: actions.updateSettings(body) }))
     .put('/api/dispatch', ({ body }) => actions.setDispatch(body.running))
 

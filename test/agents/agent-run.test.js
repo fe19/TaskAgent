@@ -4,10 +4,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentRun } from '../../src/agents/agent-run.js';
+import { claudeAdapter } from '../../src/agents/claude-cli.js';
 import { Bus } from '../../src/events.js';
 import { createStores, tempDir, removeDir, recordEvents } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_CLAUDE = fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url));
 
 const SETTINGS = {
   model: 'claude-haiku-4.5',
@@ -275,5 +277,102 @@ test('a working directory seeded with skills is not shared with the agent', asyn
   await h.run.exited;
   const summaries = h.stores.runs.listEvents(h.run.runId).map((e) => e.summary);
   assert.ok(summaries.some((s) => /access limited to the run workspace/.test(s)));
+  h.cleanup();
+});
+
+/** The same lifecycle, driven by the Claude Code adapter and its fake CLI. */
+const claude = ({ settings = {}, ...rest } = {}) =>
+  harness({
+    adapter: claudeAdapter,
+    claudeBin: FAKE_CLAUDE,
+    // Copilot polling must never be consulted for a Claude run.
+    readUsage: () => assert.fail('Claude usage comes from the result event'),
+    settings: { claude_model: 'opus', claude_effort: 'default', ...settings },
+    ...rest,
+  });
+
+test('a Claude Code run succeeds and records the assistant, its model and its answer', async () => {
+  const h = claude();
+  h.run.start();
+  const outcome = await h.run.exited;
+
+  assert.equal(outcome.status, 'succeeded');
+  const stored = h.stores.runs.get(h.run.runId);
+  assert.equal(stored.assistant, 'claude-code');
+  assert.equal(stored.model, 'opus');
+  assert.equal(stored.tool_calls, 1);
+  assert.equal(h.stores.runs.getResult(h.run.runId).result_text, 'Done. Created out.txt with the content hello.');
+  assert.ok(existsSync(join(h.run.workspace, 'out.txt')));
+  const summaries = h.stores.runs.listEvents(h.run.runId).map((e) => e.summary);
+  assert.ok(summaries.includes('Write: out.txt'));
+  h.cleanup();
+});
+
+test('Claude Code usage and cost are saved straight from its result event', async () => {
+  const h = claude();
+  h.run.start();
+  await h.run.exited;
+
+  const usage = h.stores.runs.getUsage(h.run.runId);
+  assert.equal(usage.input_tokens, 1200);
+  assert.equal(usage.cache_read_tokens, 3000);
+  assert.equal(usage.cost_usd, 0.0421);
+  assert.equal(usage.nano_aiu, null, 'Claude runs have no AI Credits');
+  assert.equal(h.events.payload('run.usage').cost_usd, 0.0421);
+  h.cleanup();
+});
+
+test('a Claude Code error result fails the run even though the CLI exits 0', async () => {
+  const h = claude({ prompt: 'ERROR_RESULT please' });
+  h.run.start();
+  const outcome = await h.run.exited;
+
+  assert.equal(outcome.status, 'failed');
+  assert.equal(h.stores.runs.get(h.run.runId).error, 'Simulated error during execution');
+  assert.equal(h.stores.runs.getUsage(h.run.runId).cost_usd, 0.001, 'a failed run still cost money');
+  h.cleanup();
+});
+
+test('a failing Claude Code CLI carries its stderr', async () => {
+  const h = claude({ prompt: 'please FAIL now' });
+  h.run.start();
+  const outcome = await h.run.exited;
+
+  assert.equal(outcome.status, 'failed');
+  assert.match(h.stores.runs.get(h.run.runId).error, /simulated failure/);
+  assert.ok(h.events.find('run.usage_unavailable'));
+  h.cleanup();
+});
+
+test('a Claude Code run can be stopped and is timed out at its limit', async () => {
+  const stopped = claude({ prompt: 'HANG forever' });
+  stopped.run.start();
+  await new Promise((r) => setTimeout(r, 150));
+  stopped.run.stop('cancelled');
+  assert.equal((await stopped.run.exited).status, 'cancelled');
+  stopped.cleanup();
+
+  const timed = claude({ prompt: 'HANG forever', settings: { max_runtime_minutes: 1 / 60 } });
+  timed.run.start();
+  assert.equal((await timed.run.exited).status, 'timed_out');
+  timed.cleanup();
+});
+
+test('the Claude Code agent gets its own environment, without GitHub tokens or secrets', async () => {
+  process.env.GH_TOKEN = 'gho_test';
+  process.env.ACR_TEST_SECRET = 'x';
+  process.env.ACR_TEST_PASSED = 'yes';
+  const h = claude({ settings: { secret_env_vars: ['ACR_TEST_SECRET'], passed_env_vars: ['ACR_TEST_PASSED', 'ACR_TEST_SECRET'] } });
+  h.run.start();
+  await h.run.exited;
+  delete process.env.GH_TOKEN;
+  delete process.env.ACR_TEST_SECRET;
+  delete process.env.ACR_TEST_PASSED;
+
+  const names = JSON.parse(readFileSync(join(h.run.workspace, 'env-names.json'), 'utf8'));
+  assert.ok(names.includes('ACR_TEST_PASSED'));
+  assert.ok(names.includes('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB'));
+  assert.ok(!names.includes('GH_TOKEN'));
+  assert.ok(!names.includes('ACR_TEST_SECRET'));
   h.cleanup();
 });

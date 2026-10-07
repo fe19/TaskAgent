@@ -28,11 +28,23 @@ export const CORE_SECRET_ENV_VARS = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB
 export const ENFORCED_GUARANTEES = [
   'Each run gets a fresh throwaway workspace directory',
   'Git cannot see above the working directory (GIT_CEILING_DIRECTORIES)',
-  'Built-in MCP servers are disabled',
+  'MCP servers are disabled',
   'The workspace is never trusted, so its skills, plugins and hooks never load',
   'Agents may access the whole working directory, unless it contains agent skills (.github, .agents or .claude) or custom agents',
-  'Blocked websites apply to web access and to shell commands such as curl',
 ];
+
+/** Guarantees that depend on what the assistant's CLI can enforce. */
+const ASSISTANT_GUARANTEES = {
+  copilot: ['Blocked websites apply to web access and to shell commands such as curl'],
+  'claude-code': [
+    'Blocked websites apply to web access only; shell commands such as curl can still reach them',
+    "Secret variables and GitHub tokens are not passed to Claude Code; its own API key is removed from the agent's shell",
+  ],
+};
+
+export function enforcedGuarantees(assistant) {
+  return [...ENFORCED_GUARANTEES, ...(ASSISTANT_GUARANTEES[assistant] ?? [])];
+}
 
 /** Splits a comma/newline separated field into a clean list. */
 export function parseList(value) {

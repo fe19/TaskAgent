@@ -5,7 +5,7 @@ description: How to change or extend Agents Tasks (this repo) — add an operati
 
 # Extending Agents Tasks
 
-A local web UI that queues prompts and runs them as GitHub Copilot CLI agents. Node ≥ 22.5
+A local web UI that queues prompts and runs them as GitHub Copilot CLI or Claude Code agents. Node ≥ 22.5
 built-ins only (`node:http`, `node:sqlite`, `node:test`), plain ES modules in the browser,
 **no npm dependencies and no build step**. Do not add any; a CDN or bundler is not an option either.
 
@@ -18,7 +18,9 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 - `src/domain/` is pure (no I/O) and is also served to the browser at `/domain/`, so the UI
   imports the same rules. Anything taking the environment takes it as an argument.
 - Only `src/store/` contains SQL.
-- Only `src/agents/copilot-cli.js` knows the CLI's argv and JSONL event format.
+- Only the adapters (`src/agents/copilot-cli.js`, `src/agents/claude-cli.js`) know a CLI's argv,
+  environment and event format. `AgentRun` drives the one `src/agents/assistants.js` returns for
+  the global `assistant` setting.
 - `src/control-room.js` wires everything; layers get dependencies passed in, so each is
   testable alone. Never import a store or the scheduler directly from a route.
 - `actions.js` holds every state-changing operation shared by all UIs.
@@ -42,13 +44,19 @@ expose it in `src/http/routes.js`. Test in `test/actions.test.js` and `test/http
 `src/domain/permissions.js`. Something enforced by how the process is built goes in
 `ENFORCED_GUARANTEES`, which the UI shows read-only. Only write a guarantee the code enforces.
 
-**Agent environment.** Agents get only the allow-list in `src/domain/environment.js` plus the
-operator's `passed_env_vars`. Add to the allow-list only what the CLI itself needs to run.
-Secrets the CLI needs go in `CORE_SECRET_ENV_VARS` (passed, but hidden from the agent's shell).
+**Agent environment.** Agents get only the allow-list in `src/domain/environment.js` (shared
+`PASSED_ENV_VARS` plus the assistant's own `ASSISTANT_ENV`) and the operator's `passed_env_vars`.
+Add only what the CLI itself needs to run. Copilot hides `CORE_SECRET_ENV_VARS` and operator
+secrets from its shell; Claude Code cannot, so its adapter does not pass them at all.
 
-**New agent backend.** Write a sibling of `src/agents/copilot-cli.js` exporting the same
-functions (`buildArgs`, `buildEnv`, `parseEvent`, `summarizeEvent`, `readResultMetrics`,
-`isReasoningEffortRejection`) and a fake in `test/fixtures/` like `fake-copilot.mjs`.
+**New agent backend.** Follow `src/agents/claude-cli.js`: export an adapter object (`id`,
+`binOption`, `defaultBin`, `pollsUsage`, `model`, `effort`, `buildArgs`, `buildEnv`, `parseEvent`,
+`interpret`), register it in `src/agents/assistants.js`, list it in `src/domain/assistants.js`,
+add its model/effort settings, its `ASSISTANT_ENV` entry and any guarantees that differ
+(`enforcedGuarantees` in `src/domain/permissions.js`), a `*Bin` option in `config.js`, and a
+fake CLI in `test/fixtures/`. Map every permission to a real flag of that CLI; where it cannot
+enforce one, say so in its guarantees instead of claiming parity. Keep the prompt out of reach of
+option parsing (Claude Code: last, after `--`).
 
 **New UI** (e.g. the planned terminal UI): call `createControlRoom()` and use `room.actions`,
 `room.bus` and `presenters`. One UI process per database.

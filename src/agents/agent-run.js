@@ -2,14 +2,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { finalActivity, resolveFinalStatus, stoppingActivity } from '../domain/run-status.js';
-import {
-  buildArgs,
-  buildEnv,
-  isReasoningEffortRejection,
-  parseEvent,
-  readResultMetrics,
-  summarizeEvent,
-} from './copilot-cli.js';
+import { copilotAdapter } from './copilot-cli.js';
 import { createWorkspace, hasTrustedConfig } from './workspace.js';
 import { terminate } from './process.js';
 import { pollUsage } from './usage-sync.js';
@@ -17,7 +10,7 @@ import { pollUsage } from './usage-sync.js';
 /** How much stderr to keep for the message shown on a failed tile. */
 const STDERR_LIMIT = 4000;
 
-/** One Copilot CLI agent on one task: spawn, stream, time limit, stop, finish. */
+/** One CLI agent on one task: spawn, stream, time limit, stop, finish. The adapter knows the CLI. */
 export class AgentRun {
   constructor({
     runs,
@@ -26,9 +19,10 @@ export class AgentRun {
     task,
     settings,
     workspaceRoot,
-    copilotBin = process.env.COPILOT_BIN || 'copilot',
+    adapter = copilotAdapter,
     usageRetries,
     readUsage,
+    ...bins // copilotBin, claudeBin: per-adapter binary overrides
   }) {
     Object.assign(this, {
       runs,
@@ -37,8 +31,9 @@ export class AgentRun {
       task,
       settings,
       workspaceRoot,
-      copilotBin,
+      adapter,
     });
+    this.bin = bins[adapter.binOption] || adapter.defaultBin;
     this.usageOptions = { retries: usageRetries, read: readUsage };
 
     this.sessionId = randomUUID();
@@ -47,6 +42,8 @@ export class AgentRun {
     this.finished = false;
     this.stderr = '';
     this.finalMessage = null;
+    this.reportedUsage = null;
+    this.reportedError = null;
   }
 
   start() {
@@ -59,11 +56,12 @@ export class AgentRun {
       taskId: this.task.id,
       sessionId: this.sessionId,
       workspaceDir: this.workspace,
-      model: this.settings.model,
+      assistant: this.adapter.id,
+      model: this.adapter.model(this.settings),
       maxRuntimeSeconds: Math.round(this.settings.max_runtime_minutes * 60),
     });
 
-    this.#spawnProcess(this.settings.reasoning_effort);
+    this.#spawnProcess(this.adapter.effort(this.settings));
 
     this.timer = setTimeout(() => this.stop('timed_out'), this.settings.max_runtime_minutes * 60_000);
     // `ended`: process gone and outcome recorded. `exited`: usage synced too.
@@ -80,20 +78,24 @@ export class AgentRun {
     this.reasoningEffort = reasoningEffort;
     this.stderr = '';
 
-    const args = buildArgs({
+    const args = this.adapter.buildArgs({
       prompt: this.task.prompt,
       workspace: this.workspace,
       workspaceRoot: this.#sharedRoot(),
-      model: this.settings.model,
+      model: this.adapter.model(this.settings),
       sessionId: this.sessionId,
       reasoningEffort,
       permissions: this.settings,
     });
 
-    this.child = spawn(this.copilotBin, args, {
+    this.child = spawn(this.bin, args, {
       cwd: this.workspace,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: buildEnv({ workspaceRoot: this.workspaceRoot, passedEnvVars: this.settings.passed_env_vars }),
+      env: this.adapter.buildEnv({
+        workspaceRoot: this.workspaceRoot,
+        passedEnvVars: this.settings.passed_env_vars,
+        secretEnvVars: this.settings.secret_env_vars,
+      }),
     });
 
     this.runs.markRunning(this.runId, this.child.pid);
@@ -115,36 +117,24 @@ export class AgentRun {
   }
 
   #onLine(line) {
-    const evt = parseEvent(line);
+    const evt = this.adapter.parseEvent(line);
     if (!evt) return;
 
-    this.#observe(evt);
-
-    // The CLI exits 0 on SIGTERM; "Finished with exit code 0" would mislead.
-    if (evt.type === 'result' && this.stopping) return;
-    const summary = summarizeEvent(evt);
-    if (summary?.summary) this.#record(summary.kind, summary.summary, evt.timestamp);
-  }
-
-  /** Pulls the facts we track out of a CLI event. Everything else is only logged. */
-  #observe(evt) {
-    switch (evt.type) {
-      case 'tool.execution_start':
-        this.toolCalls += 1;
-        this.runs.setToolCalls(this.runId, this.toolCalls);
-        break;
-      case 'assistant.message': {
-        // The last assistant message before `result` is the agent's answer.
-        const text = typeof evt.data?.content === 'string' ? evt.data.content.trim() : '';
-        if (text) this.finalMessage = text;
-        break;
-      }
-      case 'result':
-        this.runs.recordCliResult(this.runId, readResultMetrics(evt));
-        break;
-      default:
-        break;
+    const facts = this.adapter.interpret(evt);
+    if (facts.toolCalls) {
+      this.toolCalls += facts.toolCalls;
+      this.runs.setToolCalls(this.runId, this.toolCalls);
     }
+    // The last message before the result is the agent's answer.
+    if (facts.message) this.finalMessage = facts.message;
+    if (facts.usage) this.reportedUsage = facts.usage;
+    if (facts.error) this.reportedError = facts.error;
+    if (facts.result) {
+      this.runs.recordCliResult(this.runId, facts.result);
+      // The CLI exits 0 on SIGTERM; "Finished with exit code 0" would mislead.
+      if (this.stopping) return;
+    }
+    for (const a of facts.activities ?? []) this.#record(a.kind, a.summary, evt.timestamp);
   }
 
   #record(kind, summary, ts) {
@@ -159,13 +149,15 @@ export class AgentRun {
       this.retriedWithoutReasoning = true;
       this.#record(
         'retry',
-        `Model ${this.settings.model} rejected reasoning effort "${this.reasoningEffort}"; retrying with the model default`,
+        `Model ${this.adapter.model(this.settings)} rejected reasoning effort "${this.reasoningEffort}"; retrying with the model default`,
       );
       this.#spawnProcess('default');
       return;
     }
 
-    const status = resolveFinalStatus({ exitCode: code, stopReason: this.stopping });
+    // A CLI may report an error in its result and still exit 0.
+    const exitCode = code === 0 && this.reportedError && !this.stopping ? 1 : code;
+    const status = resolveFinalStatus({ exitCode, stopReason: this.stopping });
     await this.#finalize({ status, error: this.#errorFor(status, code), exitCode: code });
   }
 
@@ -175,13 +167,14 @@ export class AgentRun {
       !this.stopping &&
       !this.retriedWithoutReasoning &&
       this.reasoningEffort !== 'default' &&
-      isReasoningEffortRejection(this.stderr)
+      Boolean(this.adapter.rejectsEffort?.(this.stderr))
     );
   }
 
   /** What to tell an operator about why a run did not succeed. */
   #errorFor(status, code) {
     if (status === 'failed') {
+      if (this.reportedError) return this.reportedError;
       return this.stderr.trim().split('\n').slice(-3).join('\n') || `Exited with code ${code}`;
     }
     if (status === 'timed_out') {
@@ -209,7 +202,9 @@ export class AgentRun {
   }
 
   async #syncUsage() {
-    const usage = await pollUsage(this.sessionId, this.usageOptions);
+    const usage = this.adapter.pollsUsage
+      ? await pollUsage(this.sessionId, this.usageOptions)
+      : this.reportedUsage;
     if (!usage) {
       this.#publish('run.usage_unavailable');
       return null;

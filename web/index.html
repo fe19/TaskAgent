@@ -33,7 +33,7 @@
             <span class="stat-value" id="stat-aic">–</span>
             <span class="stat-label">AIC used</span>
           </div>
-          <div class="stat" title="AIC × price per AIC (Agent configuration)">
+          <div class="stat" title="Copilot runs: AIC × price per AIC (Agent configuration). Claude Code runs: the cost Claude Code reports (an API-price estimate on a subscription).">
             <span class="stat-value" id="stat-usd">–</span>
             <span class="stat-label">cost</span>
           </div>
@@ -87,7 +87,9 @@
             <label class="field">
               <span class="field-label">AI assistant</span>
               <select name="assistant" id="assistant-select" required></select>
-              <span class="field-hint">Claude Code and Codex are in preview and cannot run tasks yet.</span>
+              <span class="field-hint">
+                Applies to tasks started from now on. Codex is in preview and cannot run tasks yet.
+              </span>
             </label>
 
             <label class="field">
@@ -96,9 +98,15 @@
               <span class="field-hint">How many agents may run at the same time.</span>
             </label>
 
-            <label class="field">
+            <label class="field" data-assistant="copilot">
               <span class="field-label">Model</span>
               <select name="model" id="model-select" required></select>
+            </label>
+
+            <label class="field" data-assistant="claude-code" hidden>
+              <span class="field-label">Model</span>
+              <select name="claude_model" id="claude-model-select" required></select>
+              <span class="field-hint">An alias (opus, sonnet, …) follows the latest version.</span>
             </label>
 
             <label class="field">
@@ -109,12 +117,17 @@
               </span>
             </label>
 
-            <label class="field">
+            <label class="field" data-assistant="copilot">
               <span class="field-label">Reasoning effort</span>
               <select name="reasoning_effort" id="effort-select" required></select>
             </label>
 
-            <label class="field">
+            <label class="field" data-assistant="claude-code" hidden>
+              <span class="field-label">Effort</span>
+              <select name="claude_effort" id="claude-effort-select" required></select>
+            </label>
+
+            <label class="field" data-assistant="copilot">
               <span class="field-label">Price per AIC (USD)</span>
               <input type="number" name="usd_per_aic" min="0" max="100" step="any" required />
               <span class="field-hint">Converts AI Credits to the dollar cost on top. List price: $0.01.</span>
@@ -222,8 +235,8 @@
                 placeholder="e.g. AWS_SECRET_ACCESS_KEY"
               />
               <span class="field-hint">
-                Names only, never values. These are stripped from the agent's shell environment and
-                redacted from its output.
+                Names only, never values. Copilot strips these from the agent's shell and redacts
+                them from its output; Claude Code does not receive them at all.
               </span>
             </label>
 

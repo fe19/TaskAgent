@@ -13,10 +13,15 @@ export function render() {
   form.elements.passed_env_vars.value = settings.passed_env_vars.join(', ');
   form.elements.secret_env_vars.value = settings.secret_env_vars.join(', ');
 
+  const own = (id) => {
+    const { vars, prefixes } = meta.by_assistant[id];
+    return [...vars.map((v) => `<code>${esc(v)}</code>`), ...prefixes.map((p) => `<code>${esc(p)}*</code>`)].join(', ');
+  };
   $('env-locked').innerHTML = [
     `<li>${codes(meta.passed)}</li>`,
     `<li>Anything starting ${codes(meta.passed_prefixes)}</li>`,
-    `<li>${codes(meta.core_secrets)} are always secret</li>`,
+    `<li>GitHub Copilot also gets ${own('copilot')}; ${codes(meta.core_secrets)} are always secret</li>`,
+    `<li>Claude Code also gets ${own('claude-code')}; secrets and GitHub tokens are never passed to it</li>`,
   ].join('');
 
   const added = settings.passed_env_vars.length;

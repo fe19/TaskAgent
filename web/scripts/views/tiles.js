@@ -12,8 +12,12 @@ const DELETE = (id, confirm) =>
   actionButton('delete-task', id, 'Delete this task', TRASH_ICON,
     `${confirm ? ` data-confirm="${esc(confirm)}"` : ''} data-variant="danger"`);
 
-const modelTag = (model) =>
-  model ? `<span class="tile-model" title="Model: ${esc(model)}">${esc(model.replace(/^claude-/, ''))}</span>` : '';
+const ASSISTANT_TAG = { copilot: 'Copilot', 'claude-code': 'Claude Code' };
+
+const modelTag = (model, assistant) =>
+  model
+    ? `<span class="tile-model" title="${esc(ASSISTANT_TAG[assistant] ?? assistant ?? 'Model')}: ${esc(model)}">${esc(model.replace(/^claude-/, ''))}</span>`
+    : '';
 
 const RETRY = (id) => actionButton('requeue-task', id, 'Retry: move back to the queue', '&#x21bb;');
 const START = (id) => actionButton('start-task', id, 'Start this task', '&#x25b6;');
@@ -43,7 +47,7 @@ const tile = ({ outcome, title, label, sub, head = '', open = null, openTask = n
     ${foot}
   </article>`;
 
-export function queuedTile(task, { model, manual = false } = {}) {
+export function queuedTile(task, { model, assistant, manual = false } = {}) {
   const level = task.priority >= 9 ? 'urgent' : task.priority >= 5 ? 'high' : null;
   return tile({
     outcome: 'queued',
@@ -51,7 +55,7 @@ export function queuedTile(task, { model, manual = false } = {}) {
     openTask: task.id,
     drag: { taskId: task.id, lane: 'queued' },
     label: task.short_label || task.title,
-    head: `${modelTag(model)}${level ? `<span class="prio" data-level="${level}">${level}</span>` : ''}`,
+    head: `${modelTag(model, assistant)}${level ? `<span class="prio" data-level="${level}">${level}</span>` : ''}`,
     sub: `<span>${task.held ? 'On hold' : manual ? 'Ready to start' : 'Waiting for a slot'}</span>`,
     buttons: [task.held || manual ? START(task.id) : '', EDIT(task.id), DELETE(task.id)],
   });
@@ -91,7 +95,7 @@ export function runTile(run, { canRetry = false, copyOnDrag = false } = {}) {
       : canRetry || copyOnDrag
         ? { taskId: run.task_id, lane: 'done', copy: copyOnDrag }
         : null,
-    head: `${modelTag(run.model)}<span class="tile-stat"${tick}>${elapsed}</span>`,
+    head: `${modelTag(run.model, run.assistant)}<span class="tile-stat"${tick}>${elapsed}</span>`,
     sub: `${live ? '<span class="spinner" aria-hidden="true"></span>' : ''}<span>${esc(runSubtitle(run))}</span>`,
     buttons: [
       !live && run.has_result ? DOWNLOAD(run.id) : '',

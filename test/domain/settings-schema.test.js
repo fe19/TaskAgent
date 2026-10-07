@@ -46,13 +46,24 @@ test('auto_dispatch is only true for the exact string "true"', () => {
   assert.equal(decode(undefined).auto_dispatch, false);
 });
 
-test('assistant defaults to GitHub Copilot; preview assistants are rejected', () => {
+test('assistant defaults to GitHub Copilot; Claude Code is selectable, preview assistants are rejected', () => {
   assert.equal(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).assistant, 'copilot');
   assert.deepEqual(validateSettings({ assistant: 'copilot' }).values, { assistant: 'copilot' });
+  assert.deepEqual(validateSettings({ assistant: 'claude-code' }).values, { assistant: 'claude-code' });
   assert.match(validateSettings({ assistant: 'codex' }).errors[0], /Codex is in preview/);
-  assert.match(validateSettings({ assistant: 'claude-code' }).errors[0], /Claude Code is in preview/);
   assert.match(validateSettings({ assistant: 'other' }).errors[0], /must be one of/);
-  assert.deepEqual(SETTING_SPEC.assistant.values, ['copilot']);
+  assert.deepEqual(SETTING_SPEC.assistant.values, ['copilot', 'claude-code']);
+});
+
+test('Claude Code has its own model and effort, separate from Copilot\'s', () => {
+  assert.deepEqual(validateSettings({ claude_model: 'opus', claude_effort: 'xhigh' }).values, {
+    claude_model: 'opus',
+    claude_effort: 'xhigh',
+  });
+  assert.equal(validateSettings({ claude_model: 'gpt-5.4' }).errors.length, 1);
+  assert.equal(validateSettings({ claude_effort: 'minimal' }).errors.length, 1);
+  const decoded = decodeSettings({ claude_model: 'haiku', claude_effort: 'max' }, { defaultWorkspaceRoot: '/x' });
+  assert.deepEqual([decoded.claude_model, decoded.claude_effort], ['haiku', 'max']);
 });
 
 test('workspace_root falls back to the default when unset', () => {

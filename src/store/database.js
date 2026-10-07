@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS runs (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   task_id          INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   session_id       TEXT NOT NULL,
+  assistant        TEXT NOT NULL DEFAULT 'copilot',
   pid              INTEGER,
   workspace_dir    TEXT NOT NULL,
   model            TEXT NOT NULL,
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS run_usage (
   cache_write_tokens INTEGER,
   reasoning_tokens   INTEGER,
   nano_aiu           INTEGER,
+  cost_usd           REAL,
   api_duration_ms    INTEGER,
   synced_at          TEXT
 );
@@ -80,6 +82,8 @@ export const DEFAULT_SETTINGS = {
   model: 'claude-haiku-4.5',
   max_runtime_minutes: '10',
   reasoning_effort: 'default',
+  claude_model: 'sonnet',
+  claude_effort: 'default',
   // Off by default: queued tasks wait until the operator presses Start.
   auto_dispatch: 'false',
   usd_per_aic: String(DEFAULT_USD_PER_AIC),
@@ -100,9 +104,10 @@ export function openDatabase(file) {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
   // Added after release: a task paused from Working stays queued (held) until started by hand.
-  if (!db.prepare('PRAGMA table_info(tasks)').all().some((c) => c.name === 'held')) {
-    db.exec('ALTER TABLE tasks ADD COLUMN held INTEGER NOT NULL DEFAULT 0');
-  }
+  addColumn(db, 'tasks', 'held', 'INTEGER NOT NULL DEFAULT 0');
+  // Added with Claude Code: runs from before ran on Copilot, which never reports a dollar cost.
+  addColumn(db, 'runs', 'assistant', "TEXT NOT NULL DEFAULT 'copilot'");
+  addColumn(db, 'run_usage', 'cost_usd', 'REAL');
 
   const seed = db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING',
@@ -115,6 +120,11 @@ export function openDatabase(file) {
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) seed.run(key, value);
 
   return db;
+}
+
+function addColumn(db, table, column, definition) {
+  if (db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 /** Marks runs from a previous process as interrupted and requeues their tasks. */

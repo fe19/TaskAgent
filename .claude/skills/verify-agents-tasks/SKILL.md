@@ -1,12 +1,12 @@
 ---
 name: verify-agents-tasks
-description: How to test and verify a change to Agents Tasks (this repo) — the offline unit/API suite, running the app against a fake Copilot CLI, and the headless-Chrome UI check. Use after any change and before reporting it as done.
+description: How to test and verify a change to Agents Tasks (this repo) — the offline unit/API suite, running the app against the fake Copilot and Claude Code CLIs, and the headless-Chrome UI check. Use after any change and before reporting it as done.
 ---
 
 # Verifying Agents Tasks
 
-Nothing here needs the real `copilot` or `gh`, network access or a GitHub account: the
-fixtures `test/fixtures/fake-copilot.mjs` and `test/fixtures/fake-gh.mjs` stand in for them.
+Nothing here needs the real `copilot`, `claude` or `gh`, network access or an account: the
+fixtures `test/fixtures/fake-copilot.mjs`, `fake-claude.mjs` and `fake-gh.mjs` stand in for them.
 
 ## 1. Test suite (always)
 
@@ -18,26 +18,28 @@ Runs offline in about 10 s. The `node:sqlite` ExperimentalWarning is expected. R
 file with `node --test test/agents/agent-run.test.js`. Every change needs a test next to the
 module it touches (`test/` mirrors `src/`).
 
-The fake CLI is driven by markers in the task prompt:
+The fake CLIs are driven by markers in the task prompt:
 
 | Marker | Behaviour |
 | --- | --- |
 | `HANG` | never exits (time-limit and stop paths) |
 | `FAIL` | writes to stderr and exits 1 |
-| `REJECT_EFFORT` | fails while `--reasoning-effort` is passed, so the retry succeeds |
+| `REJECT_EFFORT` | Copilot only: fails while `--reasoning-effort` is passed, so the retry succeeds |
+| `ERROR_RESULT` | Claude only: reports `is_error` in its result but exits 0 |
 | anything else | a normal successful run that writes `out.txt` and `env-names.json` |
 
-`COPILOT_FAKE_DELAY_MS` delays the normal path so runs stay visible in the UI. It must start
-with `COPILOT_`: agents only receive allow-listed variables.
+`COPILOT_FAKE_DELAY_MS` / `CLAUDE_CODE_FAKE_DELAY_MS` delay the normal path so runs stay
+visible in the UI. They carry each assistant's prefix because agents only receive allow-listed
+variables.
 
-## 2. Run the app against the fake CLI
+## 2. Run the app against the fake CLIs
 
 Use a throwaway database and port so the real `data/` is untouched:
 
 ```bash
 PORT=4399 DB_FILE=/tmp/acr-ui.db \
-COPILOT_BIN=$PWD/test/fixtures/fake-copilot.mjs GH_BIN=$PWD/test/fixtures/fake-gh.mjs \
-COPILOT_FAKE_DELAY_MS=1500 npm start
+COPILOT_BIN=$PWD/test/fixtures/fake-copilot.mjs CLAUDE_BIN=$PWD/test/fixtures/fake-claude.mjs \
+GH_BIN=$PWD/test/fixtures/fake-gh.mjs COPILOT_FAKE_DELAY_MS=1500 CLAUDE_CODE_FAKE_DELAY_MS=1500 npm start
 ```
 
 Then exercise the API with `curl` on `http://127.0.0.1:4399/api/...`. Send JSON with
