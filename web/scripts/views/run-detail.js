@@ -71,44 +71,48 @@ function renderPrompt(prompt) {
   return prompt ? `<pre class="prompt-text">${esc(prompt)}</pre>` : note('No prompt recorded.');
 }
 
-/** A queued task's schedule can be changed here; any other task shows it read-only. */
-function renderSchedule(task) {
-  if (task.status !== 'queued') {
-    if (!task.run_at && !task.repeat) return '';
-    return [
-      label('Schedule'),
-      rows([
-        task.run_at ? [task.repeat ? 'Next start' : 'Starts', esc(new Date(task.run_at).toLocaleString())] : null,
-        task.repeat ? ['Repeats', esc(repeatLabel(task.repeat))] : null,
-      ]),
-    ].join('\n');
-  }
+/** Read-only schedule of a task that is no longer queued. */
+function renderScheduleFacts(task) {
+  if (!task.run_at && !task.repeat) return '';
+  return [
+    label('Schedule'),
+    rows([
+      task.run_at ? [task.repeat ? 'Next start' : 'Starts', esc(new Date(task.run_at).toLocaleString())] : null,
+      task.repeat ? ['Repeats', esc(repeatLabel(task.repeat))] : null,
+    ]),
+  ].join('\n');
+}
+
+/** A queued task is edited in place: prompt, then schedule, then one Save. */
+function renderTaskForm(task) {
   return `
-    ${label('Schedule')}
-    <form class="schedule-form" data-schedule-task="${esc(task.id)}">
+    <form class="task-edit-form" data-edit-task="${esc(task.id)}">
       <label class="field">
-        <span class="field-label">${task.repeat ? 'Next start' : 'Start at'}</span>
-        <input type="datetime-local" name="run_at" value="${esc(toLocalInput(task.run_at))}" />
+        <span class="section-label">Prompt</span>
+        <textarea name="prompt" rows="8" required>${esc(task.prompt)}</textarea>
       </label>
-      <label class="field">
-        <span class="field-label">Repeat</span>
-        <select name="repeat">${repeatOptions(task.repeat)}</select>
-      </label>
+      <p class="section-label">Schedule</p>
+      <div class="schedule-fields">
+        <label class="field">
+          <span class="field-label">${task.repeat ? 'Next start' : 'Start at'}</span>
+          <input type="datetime-local" name="run_at" value="${esc(toLocalInput(task.run_at))}" />
+        </label>
+        <label class="field">
+          <span class="field-label">Repeat</span>
+          <select name="repeat">${repeatOptions(task.repeat)}</select>
+        </label>
+      </div>
       <p class="field-hint">Leave the start empty to queue it without a time.</p>
       <div class="detail-actions">
-        <span class="save-note" id="schedule-note" aria-live="polite"></span>
-        <button type="submit" class="btn btn-ghost btn-sm">Save schedule</button>
+        <span class="save-note" id="task-edit-note" aria-live="polite"></span>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </div>
     </form>`;
 }
 
 export function renderTaskDetail(task) {
-  const edit = task.status === 'queued'
-    ? `<div class="detail-actions">
-         <button type="button" class="btn btn-ghost btn-sm" data-action="edit-task" data-id="${esc(task.id)}">Edit prompt</button>
-       </div>`
-    : '';
-  return [renderSchedule(task), label('Prompt'), renderPrompt(task.prompt), edit].join('\n');
+  if (task.status === 'queued') return renderTaskForm(task);
+  return [renderScheduleFacts(task), label('Prompt'), renderPrompt(task.prompt)].join('\n');
 }
 
 function renderResult(run, live) {

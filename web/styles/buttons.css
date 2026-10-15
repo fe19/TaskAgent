@@ -66,16 +66,16 @@ a.btn {
   transition: background 0.15s, color 0.15s;
 }
 
-.mode-switch > button:hover {
+.mode-switch > button:not([aria-checked="true"]) {
+  color: var(--purple);
+}
+
+.mode-switch > button:not([aria-checked="true"]):hover {
   color: var(--text);
 }
 
-.mode-switch > [aria-checked="true"] {
-  background: var(--ok);
-  color: #04231a;
-}
-
-.mode-switch > [data-mode="manual"][aria-checked="true"] {
-  background: var(--accent);
-  color: var(--text-on-accent);
+/* Specific enough that hover keeps the dark text on purple. */
+.mode-switch > button[aria-checked="true"][role="radio"] {
+  background: var(--purple);
+  color: #1e1038;
 }

@@ -274,8 +274,11 @@ async function scheduledTask(page) {
 
     tile?.click();
     await wait(300);
-    const form = document.querySelector(`[data-schedule-task="${task.id}"]`);
-    const shown = { runAt: form?.elements.run_at.value, repeat: form?.elements.repeat.value };
+    const form = document.querySelector(`[data-edit-task="${task.id}"]`);
+    const fields = [...(form?.querySelectorAll('textarea, input, select') ?? [])].map((el) => el.name);
+    const shown = { prompt: form?.elements.prompt.value, runAt: form?.elements.run_at.value, repeat: form?.elements.repeat.value };
+    const editButton = Boolean(document.querySelector('#run-dialog-body [data-action="edit-task"]'));
+    form.elements.prompt.value = `${marker} scheduled, edited`;
     const later = new Date(Date.now() + 5 * 3600_000);
     const pad = (n) => String(n).padStart(2, '0');
     form.elements.run_at.value = `${later.getFullYear()}-${pad(later.getMonth() + 1)}-${pad(later.getDate())}T${pad(later.getHours())}:${pad(later.getMinutes())}`;
@@ -283,16 +286,23 @@ async function scheduledTask(page) {
     form.requestSubmit();
     await wait(1200);
     const saved = (await json('/api/tasks')).tasks.find((t) => t.id === task.id);
+    const closedOnSave = !document.getElementById('run-dialog').open;
     document.getElementById('run-dialog').close();
     await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
-    return { badge, sub, shown, saved, expected: later.getHours() };
+    return { badge, sub, shown, fields, editButton, saved, closedOnSave, expected: later.getHours() };
   }, MARKER);
   check('a scheduled task is marked on its tile', Boolean(r.badge) && /Scheduled/.test(r.sub ?? ''), `${r.badge} · ${r.sub}`);
-  check('its detail shows the schedule', Boolean(r.shown.runAt) && r.shown.repeat === 'daily', JSON.stringify(r.shown));
   check(
-    'the schedule can be changed in the detail dialog',
-    r.saved?.repeat === 'weekly' && new Date(r.saved.run_at).getHours() === r.expected,
-    `${r.saved?.repeat} · ${r.saved?.run_at}`,
+    'clicking it shows an editable prompt above the schedule, with no separate edit button',
+    r.fields.join(',') === 'prompt,run_at,repeat' && !r.editButton && /scheduled$/.test(r.shown.prompt ?? '') &&
+      Boolean(r.shown.runAt) && r.shown.repeat === 'daily',
+    `${r.fields.join(',')} · edit button=${r.editButton}`,
+  );
+  check(
+    'one Save stores the edited prompt and schedule and closes the dialog',
+    /scheduled, edited$/.test(r.saved?.prompt ?? '') && r.saved?.repeat === 'weekly' &&
+      new Date(r.saved.run_at).getHours() === r.expected && r.closedOnSave,
+    `${r.saved?.prompt} · ${r.saved?.repeat} · ${r.saved?.run_at} · closed=${r.closedOnSave}`,
   );
 }
 

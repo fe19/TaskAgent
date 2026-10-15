@@ -70,21 +70,33 @@
   margin-top: 12px;
 }
 
-.schedule-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 14px;
-  margin-top: 8px;
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.schedule-form .field-hint,
-.schedule-form .detail-actions {
-  grid-column: 1 / -1;
+.task-edit-form .section-label {
   margin: 0;
 }
 
+.task-edit-form > .section-label {
+  margin-top: 8px;
+}
+
+.task-edit-form .field-hint,
+.task-edit-form .detail-actions {
+  margin: 0;
+}
+
+.schedule-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+
 @media (max-width: 520px) {
-  .schedule-form {
+  .schedule-fields {
     grid-template-columns: 1fr;
   }
 }

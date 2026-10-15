@@ -19,7 +19,7 @@ npm start      # web UI on http://127.0.0.1:4317
 
 Pick the **AI assistant** (Claude Code, the default, or GitHub Copilot) in Agent configuration; each has its own model and effort. The choice is saved as soon as you pick it and applies to tasks started afterwards; every run records which assistant ran it.
 
-Add a task with **+** in the Queued lane or **Ctrl+N**. Edit a queued task's prompt with ✎ on its tile or in its dialog; once it starts, the prompt is fixed. Starts in **Manual** mode: press ▶ on a queued task. Switch to **Auto** to run queued tasks as slots free up.
+Add a task with **+** in the Queued lane or **Ctrl+N**. Click a queued task to edit its prompt and schedule in place, then **Save** (✎ on the tile also opens the full form with priority); once it starts, the prompt is fixed. Starts in **Manual** mode: press ▶ on a queued task. Switch to **Auto** to run queued tasks as slots free up.
 
 Tiles can be dragged between lanes:
 
