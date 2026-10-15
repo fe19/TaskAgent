@@ -1,6 +1,6 @@
 # Agents Tasks
 
-Configure, queue and monitor GitHub Copilot CLI or Claude Code agents from a browser.
+Configure, manage, schedule and monitor AI assistants such as GitHub Copilot CLI or Claude Code agents from a browser.
 Zero npm dependencies, no build step.
 
 ![The board: Claude Code tasks queued (some scheduled), working and finished, with token use, cost and usage limits in the top bar](assets/board.png)
