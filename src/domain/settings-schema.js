@@ -54,13 +54,22 @@ export const SETTING_SPEC = {
   allowed_tools: { type: 'tools' },
   denied_commands: { type: 'list' },
   blocked_urls: { type: 'urls' },
+  // Websites Claude Code's sandboxed shell commands may reach; none by default.
+  shell_allowed_domains: { type: 'urls' },
   secret_env_vars: { type: 'env-names' },
   // Extra server environment variables agents receive; see ./environment.js.
   passed_env_vars: { type: 'env-names' },
 };
 
 /** Keys whose stored value is a comma-separated list but whose API shape is an array. */
-const LIST_KEYS = ['allowed_tools', 'denied_commands', 'blocked_urls', 'secret_env_vars', 'passed_env_vars'];
+const LIST_KEYS = [
+  'allowed_tools',
+  'denied_commands',
+  'blocked_urls',
+  'shell_allowed_domains',
+  'secret_env_vars',
+  'passed_env_vars',
+];
 
 /** Raw key/value rows → typed settings (lists as arrays). */
 export function decodeSettings(raw, { defaultWorkspaceRoot }) {

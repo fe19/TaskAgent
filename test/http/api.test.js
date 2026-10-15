@@ -346,7 +346,7 @@ test('switching the assistant to Claude Code runs the next task with it, with it
   const h = await boot();
   const saved = await h.put('/api/settings', { assistant: 'claude-code', claude_model: 'haiku' });
   assert.equal(saved.status, 200);
-  assert.equal((await h.get('/api/settings')).body.permissions.enforced.some((g) => /curl can still reach/.test(g)), true);
+  assert.equal((await h.get('/api/settings')).body.permissions.enforced.some((g) => /OS sandbox/.test(g)), true);
 
   await h.post('/api/tasks', { prompt: 'Say hello' });
   await h.put('/api/dispatch', { running: true });

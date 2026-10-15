@@ -24,6 +24,10 @@ export function render() {
   const form = $('permissions-form');
   form.elements.denied_commands.value = settings.denied_commands.join(', ');
   form.elements.blocked_urls.value = settings.blocked_urls.join(', ');
+  form.elements.shell_allowed_domains.value = settings.shell_allowed_domains.join(', ');
+
+  // Copilot's CLI has no OS sandbox: say so wherever its shell is on.
+  $('perm-warning').hidden = !(settings.assistant === 'copilot' && allowed.has('bash'));
 
   $('perm-locked').innerHTML = [
     ...meta.core_denied_commands.map((c) => `<li><code>${esc(c)}</code> is always blocked</li>`),
@@ -46,6 +50,7 @@ export function mount() {
         allowed_tools: [...form.querySelectorAll('input[name="tool"]:checked')].map((i) => i.value),
         denied_commands: form.elements.denied_commands.value,
         blocked_urls: form.elements.blocked_urls.value,
+        shell_allowed_domains: form.elements.shell_allowed_domains.value,
       });
       state.settings = settings;
       render();

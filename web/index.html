@@ -158,6 +158,11 @@
             <span class="chip" id="perm-summary"></span>
           </div>
           <form id="permissions-form" class="form">
+            <p class="perm-warning" id="perm-warning" role="alert" hidden>
+              GitHub Copilot’s shell is not sandboxed. With “Run shell commands” on, its agents can read and
+              change anything your user account can, such as ~/.ssh. Use Claude Code or turn the shell off
+              for untrusted work.
+            </p>
             <div class="field">
               <span class="field-label">Tools agents may use</span>
               <div class="tool-grid" id="tool-grid"></div>
@@ -190,7 +195,21 @@
               />
               <span class="field-hint">
                 Comma separated domains or URLs. Blocks web access and shell commands such as curl.
-                Shell commands can reach any other site.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Websites shell commands may reach (Claude Code)</span>
+              <input
+                type="text"
+                name="shell_allowed_domains"
+                spellcheck="false"
+                placeholder="e.g. registry.npmjs.org, pypi.org"
+              />
+              <span class="field-hint">
+                Claude Code runs shell commands in a sandbox with no network except these domains.
+                Empty: no network for shell commands. Allow only what tasks need; a broad domain such
+                as github.com can be used to send data out.
               </span>
             </label>
 

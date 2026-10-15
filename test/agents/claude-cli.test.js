@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArgs, buildEnv, interpret, parseEvent, parseRateLimits, toolArgs } from '../../src/agents/claude-cli.js';
+import { buildArgs, buildEnv, interpret, parseEvent, parseRateLimits, sandboxSettings, toolArgs } from '../../src/agents/claude-cli.js';
 
 const base = {
   prompt: 'do a thing',
@@ -49,6 +49,32 @@ test('the workspace is untrusted and MCP servers are off', () => {
   assert.deepEqual(values(args, '--setting-sources'), ['user']);
   assert.ok(args.includes('--strict-mcp-config'));
   assert.ok(!args.includes('--mcp-config'));
+});
+
+test('shell commands run in a strict OS sandbox, passed as CLI settings', () => {
+  const settings = JSON.parse(values(buildArgs(base), '--settings')[0]);
+  assert.deepEqual(settings, {
+    sandbox: {
+      enabled: true,
+      autoAllowBashIfSandboxed: true,
+      allowUnsandboxedCommands: false,
+      failIfUnavailable: true,
+      filesystem: { denyRead: ['~/'], allowRead: ['/tmp/ws/run-1', '/tmp/ws'] },
+      network: { allowedDomains: [], deniedDomains: [], strictAllowlist: true },
+    },
+  });
+});
+
+test('the sandbox reaches only allowed websites; blocked ones stay blocked', () => {
+  const { network } = sandboxSettings(
+    { shell_allowed_domains: ['https://registry.npmjs.org/', '*.pypi.org'], blocked_urls: ['evil.org'] },
+    { workspace: '/w/run' },
+  ).sandbox;
+  assert.deepEqual(network, { allowedDomains: ['registry.npmjs.org', '*.pypi.org'], deniedDomains: ['evil.org'], strictAllowlist: true });
+});
+
+test('without a shared root the sandbox reads only the run workspace', () => {
+  assert.deepEqual(sandboxSettings({}, { workspace: '/w/run', workspaceRoot: null }).sandbox.filesystem.allowRead, ['/w/run']);
 });
 
 test('effort is passed unless it is the model default', () => {

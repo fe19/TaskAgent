@@ -162,7 +162,7 @@ async function assistantSwitch(page) {
   );
   check(
     'the Claude Code choice saves and the enforced list follows it',
-    a.saved.assistant === 'claude-code' && a.saved.claude_model === 'opus' && a.enforced.some((g) => g.includes('curl can still reach')),
+    a.saved.assistant === 'claude-code' && a.saved.claude_model === 'opus' && a.enforced.some((g) => g.includes('OS sandbox')),
     `${a.saved.assistant} · ${a.saved.claude_model}`,
   );
   check('picking an assistant saves it without pressing Save', a.savedOnPick === 'copilot', a.savedOnPick);

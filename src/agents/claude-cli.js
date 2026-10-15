@@ -46,6 +46,32 @@ export function toolArgs({ allowed_tools, denied_commands, blocked_urls } = {}, 
   ];
 }
 
+/**
+ * The OS sandbox around shell commands (macOS Seatbelt, Linux bubblewrap). Commands may write
+ * only in the run workspace and working directory, read nothing else in the home folder
+ * (~/.ssh, ~/.aws, Claude's own login), and reach only the allowed websites. There is no
+ * unsandboxed retry, and a run fails rather than run unsandboxed when the sandbox can't start.
+ */
+export function sandboxSettings({ shell_allowed_domains, blocked_urls } = {}, { workspace, workspaceRoot } = {}) {
+  return {
+    sandbox: {
+      enabled: true,
+      autoAllowBashIfSandboxed: true,
+      allowUnsandboxedCommands: false,
+      failIfUnavailable: true,
+      filesystem: {
+        denyRead: ['~/'],
+        allowRead: [workspace, workspaceRoot].filter(Boolean),
+      },
+      network: {
+        allowedDomains: parseList(shell_allowed_domains).map(hostOf),
+        deniedDomains: parseList(blocked_urls).map(hostOf),
+        strictAllowlist: true,
+      },
+    },
+  };
+}
+
 /** `https://*.example.com/path` → `*.example.com`. */
 function hostOf(pattern) {
   return pattern.replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
@@ -64,6 +90,8 @@ export function buildArgs({ prompt, workspace, workspaceRoot, model, sessionId, 
     '--setting-sources', 'user',
     // No --mcp-config, so no MCP servers at all.
     '--strict-mcp-config',
+    // CLI settings win over any settings file, so the workspace can't loosen the sandbox.
+    '--settings', JSON.stringify(sandboxSettings(permissions, { workspace, workspaceRoot })),
     ...toolArgs(permissions, { workspace, workspaceRoot }),
   ];
   if (workspaceRoot) args.push('--add-dir', workspaceRoot);

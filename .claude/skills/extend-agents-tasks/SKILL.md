@@ -69,9 +69,15 @@ option parsing (Claude Code: last, after `--`).
 
 - **Local only.** `src/http/local-origin.js` rejects any request whose `Host` or `Origin` is
   not this server (CSRF and DNS rebinding). Every route goes through it; never add a bypass.
-- **Agent sandbox.** Each run gets a fresh workspace; `GIT_CEILING_DIRECTORIES` hides this
-  repo from agent `git`; `git push`, `gh` and `git remote` are always denied; built-in MCPs are
-  off; `COPILOT_ALLOW_ALL` is `'1'`, never `'true'` (that would trust the workspace).
+- **Claude Code's shell sandbox.** `sandboxSettings` in `src/agents/claude-cli.js` must keep
+  `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, `strictAllowlist: true` and the
+  home-folder `denyRead`. Never add `excludedCommands` or broad `allowWrite`/`allowRead` paths.
+- **Honest guarantees.** `ENFORCED_GUARANTEES` and `ASSISTANT_GUARANTEES` state only what is
+  enforced, including limits (Copilot's shell is not sandboxed; command blocks are text-matched).
+- **Agent setup.** Each run gets a fresh workspace; `GIT_CEILING_DIRECTORIES` stops agent `git`
+  from *finding* this repo (it does not stop `git -C`); `git push`, `gh` and `git remote` stay on
+  the deny list (text-matched); MCP servers are off; `COPILOT_ALLOW_ALL` is `'1'`, never `'true'`
+  (that would trust the workspace).
 - **No trusted config in shared roots.** `hasTrustedConfig` (`src/agents/workspace.js`) drops
   `--add-dir` when the working directory holds skills or custom agents. Keep its list in step
   with the directories the CLI loads them from.

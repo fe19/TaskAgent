@@ -99,6 +99,8 @@ export const DEFAULT_SETTINGS = {
   allowed_tools: DEFAULT_TOOL_IDS.join(','),
   denied_commands: '',
   blocked_urls: '',
+  // Empty: Claude Code's sandboxed shell reaches no website until one is allowed.
+  shell_allowed_domains: '',
   secret_env_vars: '',
   // Only the allow-list in domain/environment.js reaches agents unless named here.
   passed_env_vars: '',

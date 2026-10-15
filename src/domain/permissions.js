@@ -24,20 +24,24 @@ export const CORE_DENIED_COMMANDS = ['git push', 'gh', 'git remote'];
 /** The CLI may sign in with these, so they are passed, but always hidden from the agent's shell. */
 export const CORE_SECRET_ENV_VARS = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'];
 
-/** Shown read-only in the UI: true because of how the process is built. */
+/** Shown read-only in the UI. Only what the process actually enforces; limits are stated too. */
 export const ENFORCED_GUARANTEES = [
   'Each run gets a fresh throwaway workspace directory',
-  'Git cannot see above the working directory (GIT_CEILING_DIRECTORIES)',
   'MCP servers are disabled',
   'The workspace is never trusted, so its skills, plugins and hooks never load',
   'Agents may access the whole working directory, unless it contains agent skills (.github, .agents or .claude) or custom agents',
+  'Blocked commands are matched by their text, so they are a guard rail, not a boundary: a command such as sh -c "git push" is not caught',
 ];
 
 /** Guarantees that depend on what the assistant's CLI can enforce. */
 const ASSISTANT_GUARANTEES = {
-  copilot: ['Blocked websites apply to web access and to shell commands such as curl'],
+  copilot: [
+    'Shell commands are NOT sandboxed: with "Run shell commands" on, an agent can read and change anything your user account can (for example ~/.ssh) and use git on any repository',
+    'Blocked websites apply to web access and to shell commands such as curl; every other site is reachable',
+  ],
   'claude-code': [
-    'Blocked websites apply to web access only; shell commands such as curl can still reach them',
+    'Shell commands run in an OS sandbox: they can write only in the run workspace and working directory, cannot read the rest of your home folder (for example ~/.ssh), and cannot run unsandboxed',
+    'Shell commands reach only the websites you allow (none by default); blocked websites apply to web access too',
     "Secret variables and GitHub tokens are not passed to Claude Code; its own API key is removed from the agent's shell",
   ],
 };

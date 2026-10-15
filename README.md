@@ -9,7 +9,7 @@ Zero npm dependencies, no build step.
 
 - Node.js ≥ 22.5 (`node:sqlite`)
 - For GitHub Copilot: `copilot` on `PATH`, signed in; `gh` signed in (optional, for the remaining allowance)
-- For Claude Code: `claude` on `PATH`, signed in (`claude auth`) or `ANTHROPIC_API_KEY` set
+- For Claude Code: `claude` on `PATH`, signed in (`claude auth`) or `ANTHROPIC_API_KEY` set. Its shell sandbox works on macOS out of the box; on Linux and WSL2 it needs `bubblewrap` and `socat`. Without them, Claude Code runs fail instead of running unsandboxed.
 
 ## Run
 
@@ -110,15 +110,19 @@ Cloud keys, `SSH_AUTH_SOCK` and everything else stay out. `COPILOT_GITHUB_TOKEN`
 - Agent CPU/RAM in the top bar is measured live (`ps`) over each agent's whole process tree; CPU is a share of all cores. Shown as n/a where `ps` is unavailable.
 - Token usage comes from the Copilot session store, or for Claude Code from its final `result` event. It is never estimated: a run with no data shows "not reported yet" (still running) or "unavailable" (finished).
 - Agents get a minimal environment; see [Environment variables](#environment-variables).
-- Each run gets a throwaway workspace and may access the whole agent working directory (`--add-dir`); other paths need approval and are denied. `git push`, `gh` and `git remote` are always denied, agent `git` cannot see this repo, MCP servers are disabled.
-- Web access (`web_fetch`) is off by default. Neither CLI can enforce an allow-list: with the shell enabled, every unblocked site is reachable.
+- Each run gets a throwaway workspace and may access the whole agent working directory (`--add-dir`). MCP servers are disabled, and web access (`web_fetch`) is off by default.
+- **Claude Code's shell commands run in an OS sandbox** (macOS Seatbelt, Linux bubblewrap). They can write only in the run workspace and working directory, cannot read the rest of your home folder (so not `~/.ssh`, `~/.aws` or Claude's own login), and reach only the websites listed under **Websites shell commands may reach** (none by default). A command cannot ask to leave the sandbox, and a run fails rather than run unsandboxed. Claude's file tools are confined to the same directories.
+- **GitHub Copilot's shell is not sandboxed.** With "Run shell commands" on, a Copilot agent can read and change anything your user account can and reach any site that is not blocked. The Permissions card warns about this; use Claude Code or turn the shell off for untrusted work.
+- Blocked commands (`git push`, `gh`, `git remote` and your own) are matched by their text. They are a guard rail, not a boundary: `sh -c "git push"` is not caught by the rule (for Claude Code, the sandbox still stops it: no access to your git config and no route to GitHub unless you allow it).
 
 | | GitHub Copilot | Claude Code |
 | --- | --- | --- |
 | Tools | `--available-tools` | `--tools`; file tools allowed only in the workspace and working directory |
 | Prompts | `--allow-all-tools` within the permission flags | `--permission-mode dontAsk`: anything not allowed is denied |
 | Denied commands | `--deny-tool shell(…)` | `--disallowedTools Bash(…)` |
-| Blocked websites | `--deny-url`: web access **and** shell commands like `curl` | `WebFetch(domain:…)`: web access **only**, `curl` can still reach them |
+| Shell sandbox | none: the shell has your full user access | OS sandbox via `--settings`: writes and reads limited as above, no unsandboxed retry, fails closed |
+| Shell network | any site except blocked ones (`--deny-url`) | only allowed websites (`network.allowedDomains`, `strictAllowlist`); blocked ones denied too |
+| Blocked websites | `--deny-url`: web access and shell commands | `WebFetch(domain:…)` and the sandbox's `deniedDomains` |
 | Secrets | passed, hidden from the shell and redacted (`--secret-env-vars`) | not passed at all; its own API key is removed from the shell (`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`) |
 | Untrusted workspace | never trusted (`COPILOT_ALLOW_ALL=1`) | `--safe-mode`, `--setting-sources user`: no CLAUDE.md, skills, hooks or plugins from it |
 | MCP | `--disable-builtin-mcps` | `--strict-mcp-config` without servers |

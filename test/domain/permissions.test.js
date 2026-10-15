@@ -4,6 +4,7 @@ import {
   AVAILABLE_TOOLS,
   CORE_DENIED_COMMANDS,
   CORE_SECRET_ENV_VARS,
+  enforcedGuarantees,
   TOOL_IDS,
   DEFAULT_TOOL_IDS,
   invalidUrlPatterns,
@@ -103,4 +104,15 @@ test('every advertised tool has a label and a hint', () => {
   for (const tool of AVAILABLE_TOOLS) {
     assert.ok(tool.id && tool.label && tool.hint, `${tool.id} is incompletely described`);
   }
+});
+
+test('guarantees promise only what each assistant enforces', () => {
+  const claude = enforcedGuarantees('claude-code').join('\n');
+  const copilot = enforcedGuarantees('copilot').join('\n');
+  assert.match(claude, /OS sandbox/);
+  assert.match(copilot, /NOT sandboxed/);
+  assert.doesNotMatch(copilot, /OS sandbox/);
+  // Text-matched command blocks are a guard rail; both lists say so.
+  for (const list of [claude, copilot]) assert.match(list, /guard rail, not a boundary/);
+  assert.doesNotMatch(`${claude}\n${copilot}`, /need approval and are denied|cannot see/);
 });

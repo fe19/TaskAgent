@@ -32,6 +32,14 @@ test('decodeSettings types every field and hands lists out as arrays', () => {
   assert.deepEqual(settings.passed_env_vars, ['JAVA_HOME']);
 });
 
+test('websites for sandboxed shell commands are validated like blocked websites', () => {
+  assert.deepEqual(validateSettings({ shell_allowed_domains: 'registry.npmjs.org, pypi.org' }).values, {
+    shell_allowed_domains: 'registry.npmjs.org,pypi.org',
+  });
+  assert.equal(validateSettings({ shell_allowed_domains: 'not a domain!' }).errors.length, 1);
+  assert.deepEqual(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).shell_allowed_domains, [], 'none by default');
+});
+
 test('passed env vars must be valid names', () => {
   assert.deepEqual(validateSettings({ passed_env_vars: 'JAVA_HOME, GOPATH' }).values, {
     passed_env_vars: 'JAVA_HOME,GOPATH',
