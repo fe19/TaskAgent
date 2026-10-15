@@ -318,34 +318,59 @@
           </div>
         </section>
 
-        <section class="card monitoring-card" id="view-monitoring" role="tabpanel"
-                 aria-labelledby="tab-btn-monitoring" hidden>
-          <div class="card-head">
-            <h2 id="monitoring-h">Completed runs</h2>
+        <div class="monitoring" id="view-monitoring" role="tabpanel" aria-labelledby="tab-btn-monitoring" hidden>
+          <div class="monitoring-toolbar">
             <div class="mode-switch" id="monitoring-range" role="radiogroup" aria-label="Time range"></div>
           </div>
           <div class="monitoring-body" id="monitoring-body">
-            <div class="monitoring-figures">
-              <div class="figure">
-                <span class="figure-value" id="mon-total">–</span>
-                <span class="stat-label">runs completed</span>
+            <section class="card monitoring-card" aria-labelledby="tokens-h">
+              <div class="card-head">
+                <h2 id="tokens-h">Token usage</h2>
               </div>
-              <div class="figure">
-                <span class="figure-value" id="mon-success">–</span>
-                <span class="stat-label">succeeded</span>
+              <div class="monitoring-figures">
+                <div class="figure">
+                  <span class="figure-value" id="tok-total">–</span>
+                  <span class="stat-label">tokens used</span>
+                </div>
+                <div class="figure">
+                  <span class="figure-value" id="tok-per-run">–</span>
+                  <span class="stat-label">per run</span>
+                </div>
               </div>
-            </div>
-            <div class="chart" id="mon-chart" aria-describedby="mon-chart-desc"></div>
-            <p class="visually-hidden" id="mon-chart-desc">
-              Stacked columns: runs completed per period, split by outcome. The same numbers are in the table below.
-            </p>
-            <div class="chart-legend" id="mon-legend"></div>
-            <details class="chart-table">
-              <summary>Show as table</summary>
-              <div id="mon-table"></div>
-            </details>
+              <div class="chart" id="tok-chart"></div>
+              <p class="chart-note" id="tok-note" hidden></p>
+              <details class="chart-table">
+                <summary>Show as table</summary>
+                <div id="tok-table"></div>
+              </details>
+            </section>
+
+            <section class="card monitoring-card" aria-labelledby="monitoring-h">
+              <div class="card-head">
+                <h2 id="monitoring-h">Completed runs</h2>
+              </div>
+              <div class="monitoring-figures">
+                <div class="figure">
+                  <span class="figure-value" id="mon-total">–</span>
+                  <span class="stat-label">runs completed</span>
+                </div>
+                <div class="figure">
+                  <span class="figure-value" id="mon-success">–</span>
+                  <span class="stat-label">succeeded</span>
+                </div>
+              </div>
+              <div class="chart" id="mon-chart" aria-describedby="mon-chart-desc"></div>
+              <p class="visually-hidden" id="mon-chart-desc">
+                Stacked columns: runs completed per period, split by outcome. The same numbers are in the table below.
+              </p>
+              <div class="chart-legend" id="mon-legend"></div>
+              <details class="chart-table">
+                <summary>Show as table</summary>
+                <div id="mon-table"></div>
+              </details>
+            </section>
           </div>
-        </section>
+        </div>
       </div>
     </main>
 

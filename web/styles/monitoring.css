@@ -28,19 +28,76 @@
   border-bottom-color: var(--purple);
 }
 
-/* Outcome colours: the fixed status palette, on marks only (never on text).
-   Stack order keeps green and red apart; see domain/run-stats.js. */
-.monitoring-card {
+/* Monitoring: one time range above both panels; it scopes everything below it. */
+.monitoring {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Outcomes: the fixed status palette; the stack order keeps green and red apart (domain/run-stats.js). */
   --outcome-succeeded: #0ca30c;
   --outcome-stopped: #898781;
   --outcome-timed_out: #ec835a;
   --outcome-failed: #d03b3b;
+  /* Token line: violet, validated on the card surface (#131a26). */
+  --series-tokens: #9085e9;
 }
+
+.monitoring[hidden] {
+  display: none;
+}
+
+.monitoring-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.monitoring-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* Colours go on marks only, never on text. */
 
 .seg-succeeded { fill: var(--outcome-succeeded); background: var(--outcome-succeeded); }
 .seg-stopped { fill: var(--outcome-stopped); background: var(--outcome-stopped); }
 .seg-timed_out { fill: var(--outcome-timed_out); background: var(--outcome-timed_out); }
 .seg-failed { fill: var(--outcome-failed); background: var(--outcome-failed); }
+
+.line-stroke.line-tokens {
+  fill: none;
+  stroke: var(--series-tokens);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.line-area.line-tokens {
+  fill: var(--series-tokens);
+  opacity: 0.1;
+}
+
+/* End dot and hover marker: ringed in the card surface so they stand off the line. */
+.line-dot.line-tokens {
+  fill: var(--series-tokens);
+  stroke: var(--bg-elev);
+  stroke-width: 2;
+}
+
+.chart-crosshair {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+  pointer-events: none;
+}
+
+.chart-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
 
 /* While new data loads, the previous render stays, dimmed: no flash, no layout jump. */
 .monitoring-body[data-loading="true"] {

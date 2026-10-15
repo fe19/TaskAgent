@@ -7,7 +7,7 @@ import {
 } from '../domain/permissions.js';
 import { ASSISTANT_ENV, PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
 import { resultFileName, resultMarkdown } from '../domain/result-document.js';
-import { DEFAULT_RANGE, rangeStart } from '../domain/run-stats.js';
+import { DEFAULT_RANGE, RANGES, rangeStart } from '../domain/run-stats.js';
 import { badRequest, notFound } from '../errors.js';
 import { presentAgent, presentLimits, presentRun, presentTask } from '../presenters.js';
 
@@ -89,7 +89,7 @@ export function registerRoutes(router, { actions, settings, tasks, runs, limits,
     .get('/api/monitoring/runs', ({ url }) => {
       const range = url.searchParams.get('range') ?? DEFAULT_RANGE;
       const since = rangeStart(range);
-      if (!since) throw badRequest('range must be one of: 24h, 7d, 30d');
+      if (!since) throw badRequest(`range must be one of: ${RANGES.map((r) => r.id).join(', ')}`);
       return { range, since: since.toISOString(), runs: runs.listFinishedSince(since) };
     })
 

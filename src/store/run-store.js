@@ -49,9 +49,12 @@ export function createRunStore({ db }) {
         LIMIT ?`,
     ),
     // Only what the monitoring dashboard counts; `since` is SQLite's UTC text format.
+    // Token columns are NULL for a run that reported no usage.
     listFinishedSince: db.prepare(
-      `SELECT status, finished_at FROM runs
-        WHERE finished_at IS NOT NULL AND finished_at >= ? ORDER BY finished_at`,
+      `SELECT r.status, r.finished_at,
+              u.input_tokens, u.output_tokens, u.cache_read_tokens, u.cache_write_tokens
+         FROM runs r LEFT JOIN run_usage u ON u.run_id = r.id
+        WHERE r.finished_at IS NOT NULL AND r.finished_at >= ? ORDER BY r.finished_at`,
     ),
     appendEvent: db.prepare(
       'INSERT INTO run_events (run_id, ts, kind, summary) VALUES (?, ?, ?, ?)',
@@ -115,7 +118,7 @@ export function createRunStore({ db }) {
     getResult: (id) => statements.getResult.get(id) ?? null,
     liveRunIdForTask: (taskId) => statements.liveForTask.get(taskId)?.id ?? null,
     listRecent: (limit = RECENT_LIMIT) => statements.listRecent.all(limit),
-    /** Finished runs since `date` (a Date), oldest first: `{ status, finished_at }`. */
+    /** Finished runs since `date` (a Date), oldest first, with their token counts (null if unreported). */
     listFinishedSince: (date) =>
       statements.listFinishedSince.all(date.toISOString().replace('T', ' ').slice(0, 19)),
 

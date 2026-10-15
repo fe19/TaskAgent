@@ -440,8 +440,11 @@ test('monitoring lists the runs finished in a range; an unknown range is a 400',
   assert.equal(status, 200);
   assert.equal(body.range, '24h');
   assert.deepEqual(body.runs.map((r) => r.status), ['succeeded']);
+  // Token columns come along for the usage chart; this run reported none, so null, not 0.
+  assert.equal(body.runs[0].input_tokens, null);
   assert.ok(Date.parse(body.since) < Date.now());
   assert.equal((await h.get('/api/monitoring/runs')).body.range, '7d', 'defaults to 7 days');
+  assert.deepEqual((await h.get('/api/monitoring/runs?range=1h')).body.runs.map((r) => r.status), ['succeeded']);
   assert.equal((await h.get('/api/monitoring/runs?range=1y')).status, 400);
   await h.cleanup();
 });

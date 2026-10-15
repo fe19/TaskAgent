@@ -47,6 +47,15 @@ The UI adapts to phones and tablets: on narrow screens the configuration starts 
 
 A terminal UI is planned once the web UI is settled. The core is UI-agnostic; see [the extension skill](.claude/skills/extend-agents-tasks/SKILL.md).
 
+### Monitoring
+
+The **Monitoring** tab (next to Board; `#monitoring` in the URL) shows, for the last hour (per 5 minutes), 24 hours (per hour), 7 or 30 days (per day):
+
+- **Token usage** per period as a line, with tokens per run. A period whose runs reported no usage shows as a gap, never as zero.
+- **Completed runs** per period, stacked by outcome (succeeded, stopped, timed out, failed), with the success rate.
+
+Hover or focus a period for its numbers; each panel also has a table view. Periods follow local time.
+
 ## Test
 
 ```bash
