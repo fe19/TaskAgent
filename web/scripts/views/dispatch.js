@@ -15,7 +15,6 @@ export function render() {
   $('stop-all').textContent = `Stop all (${live})`;
 
   const hint = $('dispatch-hint');
-  hint.dataset.state = auto ? 'running' : 'paused';
   hint.textContent = auto ? autoHint(live, queued) : manualHint(live);
 }
 

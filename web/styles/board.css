@@ -1,11 +1,7 @@
 .dispatch-hint {
   margin: -6px 0 14px;
   font-size: 12px;
-  color: var(--text-faint);
-}
-
-.dispatch-hint[data-state="running"] {
-  color: var(--ok);
+  color: var(--purple);
 }
 
 .board {
