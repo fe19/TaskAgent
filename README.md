@@ -3,7 +3,7 @@
 Configure, queue and monitor GitHub Copilot CLI or Claude Code agents from a browser.
 Zero npm dependencies, no build step.
 
-![Board](docs/ui-running.png)
+![The board: Claude Code tasks queued (some scheduled), working and finished, with token use, cost and usage limits in the top bar](assets/board.png)
 
 ## Requirements
 
