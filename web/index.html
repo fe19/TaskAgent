@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/styles/board.css" />
     <link rel="stylesheet" href="/styles/dialog.css" />
     <link rel="stylesheet" href="/styles/permissions.css" />
+    <link rel="stylesheet" href="/styles/monitoring.css" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
@@ -257,7 +258,14 @@
       </aside>
 
       <div class="column">
-        <section class="card board-card" aria-labelledby="board-h">
+        <nav class="tabs" id="view-tabs" role="tablist" aria-label="Views">
+          <button type="button" role="tab" id="tab-btn-board" data-tab="board"
+                  aria-controls="view-board" aria-selected="true">Board</button>
+          <button type="button" role="tab" id="tab-btn-monitoring" data-tab="monitoring"
+                  aria-controls="view-monitoring" aria-selected="false" tabindex="-1">Monitoring</button>
+        </nav>
+
+        <section class="card board-card" id="view-board" role="tabpanel" aria-labelledby="tab-btn-board">
           <div class="card-head">
             <h2 id="board-h">Agents</h2>
             <div class="head-actions">
@@ -307,6 +315,35 @@
               </header>
               <div class="lane-body" id="lane-done"></div>
             </section>
+          </div>
+        </section>
+
+        <section class="card monitoring-card" id="view-monitoring" role="tabpanel"
+                 aria-labelledby="tab-btn-monitoring" hidden>
+          <div class="card-head">
+            <h2 id="monitoring-h">Completed runs</h2>
+            <div class="mode-switch" id="monitoring-range" role="radiogroup" aria-label="Time range"></div>
+          </div>
+          <div class="monitoring-body" id="monitoring-body">
+            <div class="monitoring-figures">
+              <div class="figure">
+                <span class="figure-value" id="mon-total">–</span>
+                <span class="stat-label">runs completed</span>
+              </div>
+              <div class="figure">
+                <span class="figure-value" id="mon-success">–</span>
+                <span class="stat-label">succeeded</span>
+              </div>
+            </div>
+            <div class="chart" id="mon-chart" aria-describedby="mon-chart-desc"></div>
+            <p class="visually-hidden" id="mon-chart-desc">
+              Stacked columns: runs completed per period, split by outcome. The same numbers are in the table below.
+            </p>
+            <div class="chart-legend" id="mon-legend"></div>
+            <details class="chart-table">
+              <summary>Show as table</summary>
+              <div id="mon-table"></div>
+            </details>
           </div>
         </section>
       </div>

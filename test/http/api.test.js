@@ -430,6 +430,22 @@ test('dragging a running repeating task back to Queued pauses it at its next occ
   await h.cleanup();
 });
 
+test('monitoring lists the runs finished in a range; an unknown range is a 400', async () => {
+  const h = await boot();
+  await h.post('/api/tasks', { prompt: 'count me' });
+  await h.put('/api/dispatch', { running: true });
+  await waitFor(async () => (await h.get('/api/agents')).body.agents[0]?.status === 'succeeded');
+
+  const { status, body } = await h.get('/api/monitoring/runs?range=24h');
+  assert.equal(status, 200);
+  assert.equal(body.range, '24h');
+  assert.deepEqual(body.runs.map((r) => r.status), ['succeeded']);
+  assert.ok(Date.parse(body.since) < Date.now());
+  assert.equal((await h.get('/api/monitoring/runs')).body.range, '7d', 'defaults to 7 days');
+  assert.equal((await h.get('/api/monitoring/runs?range=1y')).status, 400);
+  await h.cleanup();
+});
+
 test('an agent whose usage never arrived reports unavailable, not zero', async () => {
   const h = await boot();
   await h.post('/api/tasks', { prompt: 'no usage for me' });

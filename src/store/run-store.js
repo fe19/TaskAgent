@@ -48,6 +48,11 @@ export function createRunStore({ db }) {
         ORDER BY CASE WHEN r.finished_at IS NULL THEN 0 ELSE 1 END, r.id DESC
         LIMIT ?`,
     ),
+    // Only what the monitoring dashboard counts; `since` is SQLite's UTC text format.
+    listFinishedSince: db.prepare(
+      `SELECT status, finished_at FROM runs
+        WHERE finished_at IS NOT NULL AND finished_at >= ? ORDER BY finished_at`,
+    ),
     appendEvent: db.prepare(
       'INSERT INTO run_events (run_id, ts, kind, summary) VALUES (?, ?, ?, ?)',
     ),
@@ -110,6 +115,9 @@ export function createRunStore({ db }) {
     getResult: (id) => statements.getResult.get(id) ?? null,
     liveRunIdForTask: (taskId) => statements.liveForTask.get(taskId)?.id ?? null,
     listRecent: (limit = RECENT_LIMIT) => statements.listRecent.all(limit),
+    /** Finished runs since `date` (a Date), oldest first: `{ status, finished_at }`. */
+    listFinishedSince: (date) =>
+      statements.listFinishedSince.all(date.toISOString().replace('T', ' ').slice(0, 19)),
 
     appendEvent(runId, { ts, kind, summary }) {
       statements.appendEvent.run(runId, ts ?? new Date().toISOString(), kind, summary);

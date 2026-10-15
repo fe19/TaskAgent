@@ -7,7 +7,8 @@ import {
 } from '../domain/permissions.js';
 import { ASSISTANT_ENV, PASSED_ENV_PREFIXES, PASSED_ENV_VARS } from '../domain/environment.js';
 import { resultFileName, resultMarkdown } from '../domain/result-document.js';
-import { notFound } from '../errors.js';
+import { DEFAULT_RANGE, rangeStart } from '../domain/run-stats.js';
+import { badRequest, notFound } from '../errors.js';
 import { presentAgent, presentLimits, presentRun, presentTask } from '../presenters.js';
 
 /** Maps the JSON API onto the shared actions and stores. */
@@ -83,6 +84,14 @@ export function registerRoutes(router, { actions, settings, tasks, runs, limits,
       settings: settings.read(),
     }))
     .post('/api/agents/stop-all', async () => ({ stopped: await actions.stopAll() }))
+
+    // Raw rows; the browser bins them in local time with domain/run-stats.js.
+    .get('/api/monitoring/runs', ({ url }) => {
+      const range = url.searchParams.get('range') ?? DEFAULT_RANGE;
+      const since = rangeStart(range);
+      if (!since) throw badRequest('range must be one of: 24h, 7d, 30d');
+      return { range, since: since.toISOString(), runs: runs.listFinishedSince(since) };
+    })
 
     .get('/api/runs/:id', ({ params }) => {
       const run = runs.get(params.id);

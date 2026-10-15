@@ -15,11 +15,14 @@ import * as sidebar from './views/sidebar.js';
 import * as resources from './views/resources.js';
 import * as quota from './views/quota.js';
 import * as dragDrop from './views/drag-drop.js';
+import * as monitoring from './views/monitoring.js';
+import * as tabs from './views/tabs.js';
 
 // Poll if SSE silently dies.
 const POLL_MS = 10000;
 
-const VIEWS = [sidebar, settingsView, permissionsView, environmentView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions];
+// Monitoring before tabs: it must be listening when the tabs open #monitoring on load.
+const VIEWS = [sidebar, settingsView, permissionsView, environmentView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions, monitoring, tabs];
 
 async function reloadSettings() {
   const { settings, spec, permissions, environment } = await get('/api/settings');
@@ -48,6 +51,8 @@ async function refresh() {
   dispatchView.render();
   // Claude Code reports its limits during runs; reading them back is a cheap local call.
   if (state.settings?.assistant === 'claude-code') quota.load();
+  // Finished runs change the dashboard; it only fetches while its tab is open.
+  monitoring.load();
   await runDialog.refresh();
 }
 
