@@ -69,9 +69,9 @@ The agent working directory is a runtime setting (default `./workspaces`).
 
 The dollar cost in the top bar adds up both assistants. A Copilot run costs AIC × **Price per AIC** (Agent configuration, default $0.01). A Claude Code run costs what Claude Code reports (`total_cost_usd`), priced at API rates; on a Pro/Max subscription that is an estimate, not a charge. Neither is your actual bill. The AIC stat counts Copilot runs only and is hidden while Claude Code is selected.
 
-The two **left** stats follow the selected assistant:
+The **left** stats follow the selected assistant:
 
-- **Claude Code:** how much of your subscription's **5-hour** and **weekly** limit is left, in percent, with the time each resets (hover for the full date). Claude Code reports these as it runs (`rate_limit_event`), so they appear after the first Claude Code task and are as of the latest run; a window whose reset time has passed shows 100%. Claude reports a share of the limit, not a token count. API-key accounts have no such limits and show n/a.
+- **Claude Code:** how much of your subscription's **5-hour** limit (first stat) and **weekly** limit (second stat) is left, in percent. Each is labelled with when it resets and which window, e.g. "01:20 PM (5H)" and "SAT 04:00 PM (WEEK)". Hover for the full reset dates. Claude Code reports these with every API response (`rate_limit_event`). They update during each task and whenever the page is loaded or reloaded: the server then makes one tiny `claude` call (Haiku, no tools, nothing saved, stopped as soon as the limits arrive) at most once a minute, however many tabs reload. That call counts against the 5-hour window like any other. Usage elsewhere on the same subscription shows up at the next update; hover for when the reading was taken. A window whose reset time has passed shows 100%. Claude reports a share of the limit, not a token count. API-key accounts have no such limits and show n/a.
 - **GitHub Copilot:** your monthly AI Credit allowance still unused, in dollars and in percent (hover for AIC and reset date). It comes from `gh api /copilot_internal/user` (undocumented GitHub endpoint), covers your whole Copilot account and refreshes every 60 s. Shows n/a if `gh` fails.
 
 ## Environment variables

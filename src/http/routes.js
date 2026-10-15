@@ -11,7 +11,7 @@ import { notFound } from '../errors.js';
 import { presentAgent, presentLimits, presentRun, presentTask } from '../presenters.js';
 
 /** Maps the JSON API onto the shared actions and stores. */
-export function registerRoutes(router, { actions, settings, tasks, runs, limits, scheduler, resources, quota }) {
+export function registerRoutes(router, { actions, settings, tasks, runs, limits, claudeLimits, scheduler, resources, quota }) {
   router
     .get('/api/health', () => ({
       ok: true,
@@ -21,6 +21,11 @@ export function registerRoutes(router, { actions, settings, tasks, runs, limits,
     .get('/api/resources', () => resources.sample())
     .get('/api/quota', () => quota.read())
     .get('/api/claude-limits', () => presentLimits(limits.get('claude-code')))
+    // A small Claude call, so POST (origin-checked) and throttled by the refresher.
+    .post('/api/claude-limits/refresh', async () => {
+      const outcome = await claudeLimits.refresh();
+      return { ...presentLimits(limits.get('claude-code')), refresh: outcome };
+    })
 
     .get('/api/settings', () => {
       const current = settings.read();

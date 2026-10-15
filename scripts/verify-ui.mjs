@@ -76,11 +76,11 @@ async function topbar(page) {
   );
   check(
     q?.claude
-      ? 'topbar shows the Claude Code 5-hour and weekly limits left, or why they are unknown'
+      ? 'topbar shows the Claude Code 5-hour and weekly limits left, labelled with reset time and window, or why they are unknown'
       : 'topbar shows the remaining Copilot allowance in dollars and percent, or why it is unknown',
     Boolean(q?.grouped) &&
       (q.claude
-        ? /^5h left/.test(q.labels[0]) && /^week left/.test(q.labels[1]) &&
+        ? /\(5h\)$/.test(q.labels[0]) && /\(week\)$/.test(q.labels[1]) &&
           (/^\d+%$/.test(q.value) ? /Claude Code 5-hour limit/.test(q.tip) : q.value === 'n/a' && q.tip.length > 0)
         : /^\$\d+(\.\d+)?$/.test(q.value) ? /AI Credits left/.test(q.tip) && /^\d+%$/.test(q.pct)
         : q.value === '∞' ? /Unlimited/.test(q.tip)

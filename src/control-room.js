@@ -6,6 +6,7 @@ import { createSettingsStore } from './store/settings-store.js';
 import { createTaskStore } from './store/task-store.js';
 import { createRunStore } from './store/run-store.js';
 import { createLimitsStore } from './store/assistant-limits.js';
+import { createLimitsRefresher, readClaudeLimits } from './agents/claude-limits-probe.js';
 import { Scheduler } from './agents/scheduler.js';
 import { createResourceMonitor } from './agents/resource-usage.js';
 import { createQuotaReader, ghCopilotUser } from './store/copilot-quota.js';
@@ -46,6 +47,10 @@ export function createControlRoom(overrides = {}) {
   const actions = createActions({ settings, tasks, runs, scheduler, bus });
   const resources = createResourceMonitor({ scheduler, ...config.resourceMonitor });
   const quota = createQuotaReader({ fetchUser: () => ghCopilotUser(config.ghBin) });
+  const claudeLimits = createLimitsRefresher({
+    read: config.readClaudeLimits ?? (() => readClaudeLimits({ bin: config.claudeBin })),
+    save: (reading) => limits.save('claude-code', reading),
+  });
 
   scheduler.tick();
 
@@ -54,5 +59,5 @@ export function createControlRoom(overrides = {}) {
     db.close();
   }
 
-  return { config, db, bus, settings, tasks, runs, limits, scheduler, actions, resources, quota, orphaned, close };
+  return { config, db, bus, settings, tasks, runs, limits, claudeLimits, scheduler, actions, resources, quota, orphaned, close };
 }

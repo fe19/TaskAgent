@@ -1,5 +1,5 @@
 import { $ } from '../ui.js';
-import { get } from '../api-client.js';
+import { get, post } from '../api-client.js';
 import { aicToUsd, state } from '../store.js';
 import { formatUsd } from '../format.js';
 
@@ -45,7 +45,7 @@ const SHORT = { five_hour: '5h', seven_day: 'week' };
 
 /** One Claude Code window: percent left and when it resets. */
 function describeWindow(w, status) {
-  if (!w) return { value: 'n/a', label: 'left', tip: '', level: '' };
+  if (!w) return { value: 'n/a', label: '', tip: '', level: '' };
   const name = WINDOW_NAMES[w.id] ?? w.id.replace(/_/g, ' ');
   const left = w.percent_left == null ? null : Math.round(w.percent_left);
   const when = w.resets_at ? until(w.resets_at) : null;
@@ -53,7 +53,8 @@ function describeWindow(w, status) {
   const reached = status === 'rejected' && left === 0;
   return {
     value: left == null ? 'n/a' : `${left}%`,
-    label: `${SHORT[w.id] ?? name} left${when ? ` · ${when}` : ''}`,
+    // "01:20 PM (5h)": when it resets, and which window.
+    label: `${when ? `${when} ` : ''}(${SHORT[w.id] ?? name})`,
     tip: w.reset_since
       ? `Claude Code ${name} limit: reset since the last run, so it starts full again.`
       : `Claude Code ${name} limit: ${left ?? '?'}% left${w.resets_at ? `, resets ${full}` : ''}.${reached ? ' Limit reached.' : ''}`,
@@ -62,19 +63,20 @@ function describeWindow(w, status) {
 }
 
 function describeClaude(l) {
-  if (!l) return { value: '–', pct: '–', valueLabel: '5h left', pctLabel: 'week left', tip: 'Loading Claude Code limits…' };
-  if (!l.available) return { value: 'n/a', pct: 'n/a', valueLabel: '5h left', pctLabel: 'week left', tip: l.reason };
+  if (!l) return { value: '–', pct: '–', valueLabel: '(5h)', pctLabel: '(week)', tip: 'Loading Claude Code limits…' };
+  if (!l.available) return { value: 'n/a', pct: 'n/a', valueLabel: '(5h)', pctLabel: '(week)', tip: l.reason };
   const byId = Object.fromEntries(l.windows.map((w) => [w.id, w]));
   // The two windows every subscription has; anything else stays in the tooltip.
   const first = describeWindow(byId.five_hour ?? l.windows[0], l.limit_status);
   const second = describeWindow(byId.seven_day ?? l.windows[1], l.limit_status);
-  const seen = l.observed_at ? ` As of ${new Date(l.observed_at).toLocaleString()} (reported by the last Claude Code run).` : '';
+  const seen = l.observed_at ? ` As of ${new Date(l.observed_at).toLocaleString()}.` : '';
+  const failed = l.refresh?.error ? ` Could not update: ${l.refresh.error}.` : '';
   return {
     value: first.value,
     pct: second.value,
     valueLabel: first.label,
     pctLabel: second.label,
-    tip: `${first.tip} ${second.tip}${seen}`.trim(),
+    tip: `${first.tip} ${second.tip}${seen}${failed}`.trim(),
     levels: [first.level, second.level],
   };
 }
@@ -101,6 +103,20 @@ export async function load() {
     const down = { available: false, reason: 'Server unreachable.' };
     if (isClaude()) claudeLimits = down;
     else quota = down;
+  }
+  render();
+}
+
+/**
+ * Asks Claude Code for its current limits (one small call; the server throttles it). Runs once
+ * per page load, since otherwise they only update when a task runs.
+ */
+export async function refreshClaudeLimits() {
+  if (!isClaude()) return;
+  try {
+    claudeLimits = await post('/api/claude-limits/refresh');
+  } catch (err) {
+    claudeLimits = { ...(claudeLimits ?? { available: false, reason: err.message }), refresh: { error: err.message } };
   }
   render();
 }

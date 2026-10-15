@@ -18,6 +18,11 @@ async function boot() {
     copilotBin: FAKE_CLI,
     claudeBin: FAKE_CLAUDE,
     ghBin: FAKE_GH,
+    // Never the real CLI: a page load asks for fresh Claude limits.
+    readClaudeLimits: async () => ({
+      status: 'allowed',
+      windows: [{ id: 'five_hour', utilization: 0.1, resets_at: '2100-01-01T00:00:00.000Z' }],
+    }),
     usageRetries: 1,
     readUsage: () => null,
   });
@@ -309,6 +314,20 @@ test('the agents overview reports every run with its status and capacity', async
   assert.ok(agent.started_at && agent.finished_at);
   assert.equal(typeof body.capacity, 'number');
   assert.ok(body.settings, 'the board can render without a second request');
+  await h.cleanup();
+});
+
+test('a page load can refresh Claude limits; a second refresh within a minute reuses them', async () => {
+  const h = await boot();
+  const first = await h.post('/api/claude-limits/refresh');
+  assert.equal(first.status, 200);
+  assert.equal(first.body.available, true);
+  assert.deepEqual(first.body.refresh, { refreshed: true });
+  assert.equal(Math.round(first.body.windows[0].percent_left), 90);
+
+  const second = await h.post('/api/claude-limits/refresh');
+  assert.deepEqual(second.body.refresh, { refreshed: false });
+  assert.equal((await h.get('/api/claude-limits')).body.available, true);
   await h.cleanup();
 });
 

@@ -57,6 +57,8 @@ async function boot() {
 
   try {
     await reloadSettings();
+    // Not awaited: the board must not wait for a Claude call.
+    quota.refreshClaudeLimits();
     await refresh();
     clearError();
   } catch (err) {
