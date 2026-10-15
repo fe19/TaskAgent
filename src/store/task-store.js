@@ -1,4 +1,5 @@
 import { TASK_STATUSES } from '../domain/run-status.js';
+import { nextOccurrence, validateSchedule } from '../domain/schedule.js';
 import { badRequest } from '../errors.js';
 
 const MAX_PROMPT_CHARS = 10000;
@@ -12,9 +13,15 @@ function deriveTitle(prompt) {
     : firstLine;
 }
 
-export function createTaskStore({ db }) {
+// A one-off schedule is used up once the task starts; a repeating one keeps its anchor.
+const START = `status = 'running', run_at = CASE WHEN repeat IS NULL THEN NULL ELSE run_at END,
+               updated_at = datetime('now')`;
+// ISO timestamps in UTC compare correctly as text.
+const DUE = '(run_at IS NULL OR run_at <= ?)';
+
+export function createTaskStore({ db, now = () => Date.now() }) {
   const statements = {
-    insert: db.prepare('INSERT INTO tasks (title, prompt, priority) VALUES (?, ?, ?)'),
+    insert: db.prepare('INSERT INTO tasks (title, prompt, priority, run_at, repeat) VALUES (?, ?, ?, ?, ?)'),
     get: db.prepare('SELECT * FROM tasks WHERE id = ?'),
     list: db.prepare(
       `SELECT t.*,
@@ -30,29 +37,41 @@ export function createTaskStore({ db }) {
     remove: db.prepare('DELETE FROM tasks WHERE id = ?'),
     // Guarded on status, so an edit can never race the scheduler's claim.
     editQueued: db.prepare(
-      `UPDATE tasks SET title = ?, prompt = ?, priority = ?, updated_at = datetime('now')
+      `UPDATE tasks SET title = ?, prompt = ?, priority = ?, run_at = ?, repeat = ?,
+                        updated_at = datetime('now')
         WHERE id = ? AND status = 'queued' RETURNING *`,
     ),
     hold: db.prepare(
-      "UPDATE tasks SET status = 'queued', held = 1, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE tasks SET status = 'queued', held = 1, run_at = ?, updated_at = datetime('now') WHERE id = ?",
     ),
     requeue: db.prepare(
-      "UPDATE tasks SET status = 'queued', held = 0, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE tasks SET status = 'queued', held = 0, run_at = ?, updated_at = datetime('now') WHERE id = ?",
     ),
     release: db.prepare(
       "UPDATE tasks SET held = 0, updated_at = datetime('now') WHERE id = ? AND status = 'queued'",
     ),
     countQueued: db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'queued'"),
-    // A single statement, so two scheduler passes can never claim one task.
+    // A single statement, so two scheduler passes can never claim one task. A task waiting
+    // for its start time is skipped; once due, it goes first.
     claimNext: db.prepare(
-      `UPDATE tasks SET status = 'running', updated_at = datetime('now')
-        WHERE id = (SELECT id FROM tasks WHERE status = 'queued' AND held = 0
-                     ORDER BY priority DESC, id ASC LIMIT 1)
+      `UPDATE tasks SET ${START}
+        WHERE id = (SELECT id FROM tasks WHERE status = 'queued' AND held = 0 AND ${DUE}
+                     ORDER BY run_at IS NULL, priority DESC, id ASC LIMIT 1)
         RETURNING *`,
     ),
+    // Starting by hand works before the start time too.
     claim: db.prepare(
-      `UPDATE tasks SET status = 'running', held = 0, updated_at = datetime('now')
+      `UPDATE tasks SET ${START}, held = 0
         WHERE id = ? AND status = 'queued' RETURNING *`,
+    ),
+    listDue: db.prepare(
+      `SELECT * FROM tasks
+        WHERE status = 'queued' AND held = 0 AND run_at IS NOT NULL AND run_at <= ?
+        ORDER BY run_at, priority DESC, id`,
+    ),
+    reschedule: db.prepare(
+      `UPDATE tasks SET status = 'queued', held = 0, run_at = ?, updated_at = datetime('now')
+        WHERE id = ? RETURNING *`,
     ),
   };
 
@@ -76,14 +95,33 @@ export function createTaskStore({ db }) {
     return [finalTitle, text, p];
   }
 
+  /** `current`: an unchanged start time may already have passed (due, waiting for a slot). */
+  function validateWhen(input, current = null) {
+    const unchanged = current?.run_at != null && Date.parse(input.run_at) === Date.parse(current.run_at);
+    const schedule = validateSchedule(input, unchanged ? Date.parse(current.run_at) : now());
+    if (schedule.error) throw badRequest(schedule.error);
+    return [schedule.runAt, schedule.repeat];
+  }
+
+  /**
+   * Where a task back in the queue starts: a repeating one at its next occurrence, a one-off
+   * whose time has passed as soon as it is started (Auto) or by hand (Manual).
+   */
+  function startTimeOnRequeue(id) {
+    const task = get(id);
+    if (!task?.run_at) return null;
+    if (task.repeat) return nextOccurrence(task.repeat, task.run_at, now());
+    return Date.parse(task.run_at) > now() ? task.run_at : null;
+  }
+
   function create(input) {
-    const { lastInsertRowid } = statements.insert.run(...validate(input));
+    const { lastInsertRowid } = statements.insert.run(...validate(input), ...validateWhen(input));
     return get(Number(lastInsertRowid));
   }
 
   /** Rewrites a queued task; null once it has left the queue. */
   function editQueued(id, input) {
-    return statements.editQueued.get(...validate(input), id) ?? null;
+    return statements.editQueued.get(...validate(input), ...validateWhen(input, get(id)), id) ?? null;
   }
 
   function setStatus(id, status) {
@@ -108,14 +146,18 @@ export function createTaskStore({ db }) {
     setStatus,
     remove,
     /** Queues a task for the scheduler to pick up. */
-    requeue: (id) => (statements.requeue.run(id), get(id)),
+    requeue: (id) => (statements.requeue.run(startTimeOnRequeue(id), id), get(id)),
     /** Queues a task that the scheduler skips until `release`. */
-    hold: (id) => (statements.hold.run(id), get(id)),
+    hold: (id) => (statements.hold.run(startTimeOnRequeue(id), id), get(id)),
     release: (id) => (statements.release.run(id), get(id)),
-    /** Atomically moves the highest-priority queued, unheld task to `running`. */
-    claimNext: () => statements.claimNext.get() ?? null,
+    /** Atomically moves the next due, unheld queued task to `running`. */
+    claimNext: () => statements.claimNext.get(new Date(now()).toISOString()) ?? null,
     /** Claims one specific queued task, held or not. */
     claim: (id) => statements.claim.get(id) ?? null,
     countQueued: () => statements.countQueued.get().n,
+    /** Queued tasks whose start time has come, earliest first. */
+    listDue: () => statements.listDue.all(new Date(now()).toISOString()),
+    /** Back to the queue, waiting for `runAt`. */
+    reschedule: (id, runAt) => statements.reschedule.get(runAt, id) ?? null,
   };
 }

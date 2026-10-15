@@ -47,3 +47,23 @@ export function elapsedMs(run) {
   const end = run.finished_at ? parseUtc(run.finished_at) : Date.now();
   return Math.max(0, (end ?? Date.now()) - started);
 }
+
+/** A start time, short: "15:00" today, "Thu 23:00" within a week, else "30 Oct 23:00". */
+export function formatWhen(iso) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '–';
+  const time = at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  if (at.toDateString() === now.toDateString()) return time;
+  const days = (at - now) / 86_400_000;
+  if (days > -1 && days < 6) return `${at.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
+  return `${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${time}`;
+}
+
+/** ISO → the value a `datetime-local` input shows (local time, minutes). */
+export function toLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

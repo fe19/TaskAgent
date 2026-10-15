@@ -148,8 +148,14 @@ export function createActions({ settings, tasks, runs, scheduler, bus }) {
         if (!runId || !(await scheduler.stopRunAndWait(runId, 'cancelled'))) {
           throw conflict('No live agent process for this task');
         }
-        // Dragged back by hand: paused until started again.
-        if (to === 'queued') requeue(id, { hold: true });
+        // Dragged back by hand: paused until started again. A repeating task is already back
+        // in the queue for its next occurrence, so it is only held.
+        if (to === 'queued') {
+          if (tasks.get(id).status === 'queued') {
+            tasks.hold(id);
+            bus.publish('task.requeued', { taskId: id });
+          } else requeue(id, { hold: true });
+        }
         return tasks.get(id);
       }
       if (to === 'done') {

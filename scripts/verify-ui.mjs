@@ -259,6 +259,43 @@ async function environment(page) {
   );
 }
 
+async function scheduledTask(page) {
+  const r = await inPage(page, async (marker) => {
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+    const json = async (path, method = 'GET', body) =>
+      (await fetch(path, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
+    const runAt = new Date(Date.now() + 2 * 3600_000).toISOString();
+    const { task } = await json('/api/tasks', 'POST', { prompt: `${marker} scheduled`, run_at: runAt, repeat: 'daily' });
+    await wait(1500);
+
+    const tile = document.querySelector(`[data-open-task="${task.id}"]`);
+    const badge = tile?.querySelector('.tile-schedule')?.textContent.trim() ?? null;
+    const sub = tile?.querySelector('.tile-sub span')?.textContent.trim() ?? null;
+
+    tile?.click();
+    await wait(300);
+    const form = document.querySelector(`[data-schedule-task="${task.id}"]`);
+    const shown = { runAt: form?.elements.run_at.value, repeat: form?.elements.repeat.value };
+    const later = new Date(Date.now() + 5 * 3600_000);
+    const pad = (n) => String(n).padStart(2, '0');
+    form.elements.run_at.value = `${later.getFullYear()}-${pad(later.getMonth() + 1)}-${pad(later.getDate())}T${pad(later.getHours())}:${pad(later.getMinutes())}`;
+    form.elements.repeat.value = 'weekly';
+    form.requestSubmit();
+    await wait(1200);
+    const saved = (await json('/api/tasks')).tasks.find((t) => t.id === task.id);
+    document.getElementById('run-dialog').close();
+    await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
+    return { badge, sub, shown, saved, expected: later.getHours() };
+  }, MARKER);
+  check('a scheduled task is marked on its tile', Boolean(r.badge) && /Scheduled/.test(r.sub ?? ''), `${r.badge} · ${r.sub}`);
+  check('its detail shows the schedule', Boolean(r.shown.runAt) && r.shown.repeat === 'daily', JSON.stringify(r.shown));
+  check(
+    'the schedule can be changed in the detail dialog',
+    r.saved?.repeat === 'weekly' && new Date(r.saved.run_at).getHours() === r.expected,
+    `${r.saved?.repeat} · ${r.saved?.run_at}`,
+  );
+}
+
 const setMode = (page, mode) =>
   inPage(
     page,
@@ -670,7 +707,7 @@ let failed = 1;
 try {
   page = await openPage({ port: browser.port, url: APP });
   await sleep(3500);
-  for (const section of [topbar, settingsForm, assistantSwitch, permissions, environment, queueing, liveRun, finishedRun, responsive]) {
+  for (const section of [topbar, settingsForm, assistantSwitch, permissions, environment, scheduledTask, queueing, liveRun, finishedRun, responsive]) {
     await section(page);
   }
   failed = checks.filter((c) => !c.ok).length;

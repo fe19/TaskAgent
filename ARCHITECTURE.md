@@ -14,7 +14,7 @@ src/
 ├── config.js, events.js   env config, event bus
 ├── domain/                pure rules — also served to the browser at /domain/
 ├── store/                 all SQL, plus read-only Copilot usage and quota (via gh) readers
-├── agents/                spawning: CLI adapters, run lifecycle, scheduler, workspaces, CPU/RAM sampling
+├── agents/                spawning: CLI adapters, run lifecycle, scheduler (slots), task clock (start times), workspaces, CPU/RAM sampling
 └── http/                  server, router, routes, SSE, static files
 web/                       browser UI: main.js composes views/, store.js holds state
 test/                      mirrors src/; fixtures/fake-copilot.mjs, fake-claude.mjs and fake-gh.mjs stand in for the CLIs
@@ -31,6 +31,7 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 - Only `store/` contains SQL.
 - Only the adapters (`agents/copilot-cli.js`, `agents/claude-cli.js`) know a CLI's argv, environment and event format.
 - `AgentRun` drives whichever adapter `agents/assistants.js` returns for the `assistant` setting; the scheduler reads it when a task starts.
+- Two things start tasks: the `Scheduler` fills free slots (Auto mode, or ▶), and the `TaskClock` (`agents/task-clock.js`) starts scheduled tasks whose `run_at` has come, in either mode, and requeues a repeating task for its next occurrence after each run. `claimNext` never takes a task before its `run_at`.
 - Dependencies are passed in by `control-room.js`, so each layer is testable alone.
 
 ## Extending
@@ -42,9 +43,9 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 
 ## Data
 
-`settings`, `tasks`, `runs` (with the `assistant` that ran it), `run_events`, `run_usage` (`nano_aiu` for Copilot, `cost_usd` for Claude Code), `assistant_limits` (the latest account limits an assistant reported, e.g. Claude Code's 5-hour and weekly windows) — see `store/database.js`. New columns are added on boot by `addColumn`.
+`settings`, `tasks` (with `run_at`, the next start in UTC, and `repeat`; see `domain/schedule.js`), `runs` (with the `assistant` that ran it), `run_events`, `run_usage` (`nano_aiu` for Copilot, `cost_usd` for Claude Code), `assistant_limits` (the latest account limits an assistant reported, e.g. Claude Code's 5-hour and weekly windows) — see `store/database.js`. New columns are added on boot by `addColumn`.
 
-On boot, runs left live by a previous process become `interrupted`, and their tasks are requeued.
+On boot, runs left live by a previous process become `interrupted`, and their tasks are requeued. Scheduled starts missed while the server was down run once on boot.
 
 ## Tests
 

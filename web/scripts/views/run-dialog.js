@@ -1,8 +1,9 @@
-import { $ } from '../ui.js';
+import { $, flashNote } from '../ui.js';
 import { state } from '../store.js';
 import { esc } from '../format.js';
-import { get } from '../api-client.js';
+import { get, put } from '../api-client.js';
 import { renderDetail, renderTaskDetail } from './run-detail.js';
+import { readSchedule } from './schedule-fields.js';
 import { isLive } from '/domain/run-status.js';
 
 // Follow new activity only while the reader is near the bottom.
@@ -67,9 +68,40 @@ function toggleMeta(event) {
   button.textContent = showMeta ? 'Hide details' : 'Show details';
 }
 
-export function mount() {
+/** Saves a queued task's schedule from its detail dialog; prompt and priority stay as they are. */
+async function saveSchedule(event, refreshBoard) {
+  const form = event.target.closest('[data-schedule-task]');
+  if (!form) return;
+  event.preventDefault();
+  const task = state.tasks.find((t) => String(t.id) === form.dataset.scheduleTask);
+  if (!task) return;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const schedule = readSchedule(form);
+    const { task: saved } = await put(`/api/tasks/${task.id}`, {
+      prompt: task.prompt,
+      priority: task.priority,
+      ...schedule,
+    });
+    await refreshBoard();
+    $('run-dialog-body').innerHTML = renderTaskDetail({ ...task, ...saved });
+    // A server started before scheduling existed accepts the edit but drops the time.
+    if (schedule.run_at && !saved.run_at) throw new Error('The server did not save the start time. Restart the server.');
+    flashNote('schedule-note');
+  } catch (err) {
+    // Shown in the dialog: the page's error banner is hidden behind it.
+    const note = $('schedule-note');
+    note.textContent = err.message;
+    note.dataset.state = 'error';
+    button.disabled = false;
+  }
+}
+
+export function mount({ refresh: refreshBoard }) {
   $('run-dialog-close').addEventListener('click', close);
   $('run-dialog-body').addEventListener('click', toggleMeta);
+  $('run-dialog-body').addEventListener('submit', (event) => saveSchedule(event, refreshBoard));
   $('run-dialog').addEventListener('close', () => {
     state.openRunId = null;
   });

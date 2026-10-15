@@ -1,7 +1,9 @@
-import { esc, elapsedMs, formatDuration, formatUsd } from '../format.js';
+import { esc, elapsedMs, formatDuration, formatUsd, toLocalInput } from '../format.js';
+import { repeatOptions } from './schedule-fields.js';
 import { usageUsd } from '../store.js';
 import { isLive, resultLabel } from '/domain/run-status.js';
 import { ASSISTANTS } from '/domain/assistants.js';
+import { repeatLabel } from '/domain/schedule.js';
 
 const assistantName = (id) => ASSISTANTS.find((a) => a.id === id)?.name ?? id;
 const isClaude = (run) => run.assistant === 'claude-code';
@@ -69,13 +71,44 @@ function renderPrompt(prompt) {
   return prompt ? `<pre class="prompt-text">${esc(prompt)}</pre>` : note('No prompt recorded.');
 }
 
+/** A queued task's schedule can be changed here; any other task shows it read-only. */
+function renderSchedule(task) {
+  if (task.status !== 'queued') {
+    if (!task.run_at && !task.repeat) return '';
+    return [
+      label('Schedule'),
+      rows([
+        task.run_at ? [task.repeat ? 'Next start' : 'Starts', esc(new Date(task.run_at).toLocaleString())] : null,
+        task.repeat ? ['Repeats', esc(repeatLabel(task.repeat))] : null,
+      ]),
+    ].join('\n');
+  }
+  return `
+    ${label('Schedule')}
+    <form class="schedule-form" data-schedule-task="${esc(task.id)}">
+      <label class="field">
+        <span class="field-label">${task.repeat ? 'Next start' : 'Start at'}</span>
+        <input type="datetime-local" name="run_at" value="${esc(toLocalInput(task.run_at))}" />
+      </label>
+      <label class="field">
+        <span class="field-label">Repeat</span>
+        <select name="repeat">${repeatOptions(task.repeat)}</select>
+      </label>
+      <p class="field-hint">Leave the start empty to queue it without a time.</p>
+      <div class="detail-actions">
+        <span class="save-note" id="schedule-note" aria-live="polite"></span>
+        <button type="submit" class="btn btn-ghost btn-sm">Save schedule</button>
+      </div>
+    </form>`;
+}
+
 export function renderTaskDetail(task) {
   const edit = task.status === 'queued'
     ? `<div class="detail-actions">
          <button type="button" class="btn btn-ghost btn-sm" data-action="edit-task" data-id="${esc(task.id)}">Edit prompt</button>
        </div>`
     : '';
-  return [label('Prompt'), renderPrompt(task.prompt), edit].join('\n');
+  return [renderSchedule(task), label('Prompt'), renderPrompt(task.prompt), edit].join('\n');
 }
 
 function renderResult(run, live) {

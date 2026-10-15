@@ -8,6 +8,7 @@ import { createRunStore } from './store/run-store.js';
 import { createLimitsStore } from './store/assistant-limits.js';
 import { createLimitsRefresher, readClaudeLimits } from './agents/claude-limits-probe.js';
 import { Scheduler } from './agents/scheduler.js';
+import { TaskClock } from './agents/task-clock.js';
 import { createResourceMonitor } from './agents/resource-usage.js';
 import { createQuotaReader, ghCopilotUser } from './store/copilot-quota.js';
 import { resolveWorkspaceRoot, defaultWorkspaceRoot } from './agents/workspace.js';
@@ -53,11 +54,13 @@ export function createControlRoom(overrides = {}) {
   });
 
   scheduler.tick();
+  const clock = new TaskClock({ tasks, scheduler, bus, ...config.clock }).start();
 
   async function close() {
+    clock.stop();
     await scheduler.shutdown();
     db.close();
   }
 
-  return { config, db, bus, settings, tasks, runs, limits, claudeLimits, scheduler, actions, resources, quota, orphaned, close };
+  return { config, db, bus, settings, tasks, runs, limits, claudeLimits, scheduler, clock, actions, resources, quota, orphaned, close };
 }

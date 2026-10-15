@@ -281,7 +281,6 @@
           <div class="board" id="board">
             <section class="lane" data-lane="queued" aria-labelledby="lane-queued-h">
               <header class="lane-head">
-                <span class="lane-dot" aria-hidden="true"></span>
                 <h3 id="lane-queued-h">Queued</h3>
                 <span class="lane-count" id="count-queued">0</span>
               </header>
@@ -295,7 +294,6 @@
 
             <section class="lane" data-lane="running" aria-labelledby="lane-running-h">
               <header class="lane-head">
-                <span class="lane-dot" aria-hidden="true"></span>
                 <h3 id="lane-running-h">Working</h3>
                 <span class="lane-count" id="count-running">0</span>
               </header>
@@ -304,7 +302,6 @@
 
             <section class="lane" data-lane="done" aria-labelledby="lane-done-h">
               <header class="lane-head">
-                <span class="lane-dot" aria-hidden="true"></span>
                 <h3 id="lane-done-h">Finished</h3>
                 <span class="lane-count" id="count-done">0</span>
               </header>
@@ -349,6 +346,21 @@
               <option value="5">High</option>
               <option value="9">Urgent</option>
             </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Start at</span>
+            <input type="datetime-local" name="run_at" />
+            <span class="field-hint">
+              Leave empty to queue it now. A scheduled task starts at this time in Manual and Auto mode.
+            </span>
+          </label>
+          <label class="field">
+            <span class="field-label">Repeat</span>
+            <select name="repeat" id="task-repeat"></select>
+            <span class="field-hint">
+              Repeats from the start time. Each occurrence is a new run; stopping one run does not end
+              the series. To end it, set Never or delete the task.
+            </span>
           </label>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="task-submit">Add to queue</button>

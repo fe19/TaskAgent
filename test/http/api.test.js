@@ -19,6 +19,8 @@ async function boot() {
     claudeBin: FAKE_CLAUDE,
     ghBin: FAKE_GH,
     // Never the real CLI: a page load asks for fresh Claude limits.
+    // Scheduled tasks are checked often, so tests need not wait seconds.
+    clock: { tickMs: 100 },
     readClaudeLimits: async () => ({
       status: 'allowed',
       windows: [{ id: 'five_hour', utilization: 0.1, resets_at: '2100-01-01T00:00:00.000Z' }],
@@ -361,6 +363,70 @@ test('switching the assistant to Claude Code runs the next task with it, with it
   const limits = (await h.get('/api/claude-limits')).body;
   assert.equal(limits.available, true);
   assert.deepEqual(limits.windows.map((w) => [w.id, Math.round(w.percent_left)]), [['five_hour', 75], ['seven_day', 40]]);
+  await h.cleanup();
+});
+
+test('a scheduled task waits in the queue and starts at its time, even in Manual mode', async () => {
+  const h = await boot();
+  const runAt = new Date(Date.now() + 1200).toISOString();
+  const created = await h.post('/api/tasks', { prompt: 'scheduled hello', run_at: runAt });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.task.run_at, runAt);
+
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal((await h.get('/api/tasks')).body.tasks[0].status, 'queued', 'not before its time');
+  await waitFor(async () => (await h.get('/api/agents')).body.agents[0]?.status === 'succeeded');
+  assert.equal((await h.get('/api/tasks')).body.tasks[0].run_at, null, 'a one-off schedule is used up');
+  await h.cleanup();
+});
+
+test('a repeating task is queued again for its next occurrence after it runs', async () => {
+  const h = await boot();
+  const runAt = new Date(Date.now() + 300).toISOString();
+  const { body } = await h.post('/api/tasks', { prompt: 'hourly hello', run_at: runAt, repeat: 'hourly' });
+  await waitFor(async () => (await h.get('/api/agents')).body.agents[0]?.status === 'succeeded');
+  await waitFor(async () => (await h.get('/api/tasks')).body.tasks[0].status === 'queued');
+
+  const task = (await h.get('/api/tasks')).body.tasks.find((t) => t.id === body.task.id);
+  assert.equal(task.repeat, 'hourly');
+  assert.equal(Date.parse(task.run_at) - Date.parse(runAt), 3_600_000);
+  await h.cleanup();
+});
+
+test('the schedule of a queued task can be changed and cleared, keeping its prompt', async () => {
+  const h = await boot();
+  const first = new Date(Date.now() + 3600_000).toISOString();
+  const { body } = await h.post('/api/tasks', { prompt: 'reschedule me', priority: 5, run_at: first });
+  const later = new Date(Date.now() + 7200_000).toISOString();
+
+  const moved = await h.put(`/api/tasks/${body.task.id}`, { prompt: 'reschedule me', priority: 5, run_at: later, repeat: 'weekly' });
+  assert.equal(moved.status, 200);
+  assert.deepEqual([moved.body.task.run_at, moved.body.task.repeat, moved.body.task.prompt], [later, 'weekly', 'reschedule me']);
+
+  const cleared = await h.put(`/api/tasks/${body.task.id}`, { prompt: 'reschedule me', priority: 5, run_at: null, repeat: null });
+  assert.deepEqual([cleared.body.task.run_at, cleared.body.task.repeat], [null, null]);
+  await h.cleanup();
+});
+
+test('a bad schedule is a 400 with the reason', async () => {
+  const h = await boot();
+  const res = await h.post('/api/tasks', { prompt: 'x', repeat: 'daily' });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /first start time/);
+  await h.cleanup();
+});
+
+test('dragging a running repeating task back to Queued pauses it at its next occurrence', async () => {
+  const h = await boot();
+  const runAt = new Date(Date.now() + 200).toISOString();
+  const { body } = await h.post('/api/tasks', { prompt: 'HANG hourly', run_at: runAt, repeat: 'hourly' });
+  await waitFor(async () => (await h.get('/api/tasks')).body.tasks[0].status === 'running');
+
+  const moved = await h.post(`/api/tasks/${body.task.id}/move`, { from: 'running', to: 'queued' });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.task.status, 'queued');
+  assert.equal(moved.body.task.held, 1);
+  assert.ok(Date.parse(moved.body.task.run_at) > Date.now());
   await h.cleanup();
 });
 

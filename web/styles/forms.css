@@ -61,6 +61,10 @@ button:focus-visible {
   color: var(--ok);
 }
 
+.save-note[data-state='error'] {
+  color: var(--danger);
+}
+
 @media (pointer: coarse) {
   input[type="number"],
   input[type="text"],

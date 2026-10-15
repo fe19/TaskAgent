@@ -34,6 +34,15 @@ Tiles can be dragged between lanes:
 
 Every finished tile can be dragged. If its task is already queued or working again, the drop adds a copy of the task instead.
 
+### Scheduling
+
+Set **Start at** in the task dialog to run a task at a given time, and **Repeat** (every hour, day, weekday or week) to run it again from then on. Repeats keep the local wall-clock time, also across daylight-saving changes.
+
+- A scheduled task waits in the Queued lane ("Starts Thu 23:00", "↻ Every day") and starts at its time in **Manual and Auto** mode. If no slot is free, it shows "Due: waiting for a slot" and starts first when one frees. ▶ starts it early.
+- After each run, a repeating task goes back to the queue for its next occurrence; each occurrence is a new run on the board. Stopping or failing one run does not end the series. To end it, edit the task to *Never*, drag it from Queued to Finished, or delete it. Dragging a running repeating task back to Queued pauses it (On hold) until ▶.
+- If the server was not running at a start time, the task runs once as soon as it starts again; missed repeats are not caught up one by one.
+- Times are checked every 5 s, so a task starts up to a few seconds after its time.
+
 The UI adapts to phones and tablets: on narrow screens the configuration starts collapsed so the board comes first, and the lanes stack. Dragging needs a mouse; on touch screens use the tile buttons instead.
 
 A terminal UI is planned once the web UI is settled. The core is UI-agnostic; see [the extension skill](.claude/skills/extend-agents-tasks/SKILL.md).

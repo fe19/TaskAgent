@@ -1,4 +1,5 @@
 import { isLive, isTerminal } from '/domain/run-status.js';
+import { isWaitingForTime } from '/domain/schedule.js';
 
 export const state = {
   agents: [],
@@ -19,10 +20,19 @@ export const liveAgents = () => state.agents.filter((a) => isLive(a.status));
 export const finishedAgents = () =>
   state.agents.filter((a) => !isLive(a.status)).sort((a, b) => b.id - a.id);
 
-export const queuedTasks = () =>
-  state.tasks
+/** Ready tasks first (as the scheduler picks them), then those waiting for their time, soonest first. */
+export const queuedTasks = () => {
+  const now = Date.now();
+  return state.tasks
     .filter((t) => t.status === 'queued')
-    .sort((a, b) => b.priority - a.priority || a.id - b.id);
+    .sort((a, b) => {
+      const wa = isWaitingForTime(a, now);
+      const wb = isWaitingForTime(b, now);
+      if (wa !== wb) return wa ? 1 : -1;
+      if (wa) return Date.parse(a.run_at) - Date.parse(b.run_at);
+      return Boolean(b.run_at) - Boolean(a.run_at) || b.priority - a.priority || a.id - b.id;
+    });
+};
 
 export const strandedTasks = () => {
   const ran = new Set(state.agents.map((a) => a.task_id));

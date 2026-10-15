@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   status     TEXT NOT NULL DEFAULT 'queued',
   priority   INTEGER NOT NULL DEFAULT 0,
   held       INTEGER NOT NULL DEFAULT 0,
+  run_at     TEXT,
+  repeat     TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -114,6 +116,9 @@ export function openDatabase(file) {
   // Added with Claude Code: runs from before ran on Copilot, which never reports a dollar cost.
   addColumn(db, 'runs', 'assistant', "TEXT NOT NULL DEFAULT 'copilot'");
   addColumn(db, 'run_usage', 'cost_usd', 'REAL');
+  // Added with scheduling: when a task starts (UTC ISO) and how it repeats (domain/schedule.js).
+  addColumn(db, 'tasks', 'run_at', 'TEXT');
+  addColumn(db, 'tasks', 'repeat', 'TEXT');
 
   const seed = db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING',

@@ -16,6 +16,7 @@ const REFRESH_EVENTS = [
   'scheduler.error',
   'settings.updated',
   'assistant.limits',
+  'task.rescheduled',
 ];
 
 function setConnection(name, label) {

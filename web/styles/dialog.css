@@ -65,8 +65,28 @@
 .detail-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
+}
+
+.schedule-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin-top: 8px;
+}
+
+.schedule-form .field-hint,
+.schedule-form .detail-actions {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .schedule-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 .agent-error {
