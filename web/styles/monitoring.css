@@ -170,13 +170,14 @@
   top: 8px;
   z-index: 2;
   min-width: 140px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-elev-2);
   box-shadow: 0 8px 24px #0008;
   pointer-events: none;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .chart-tip p {
@@ -188,21 +189,31 @@
   margin-bottom: 4px !important;
 }
 
+/* Key, value, label side by side. The value has a minimum width so rows line up, and grows
+   (instead of running into the label) when a number is longer. */
 .chart-tip-row {
-  display: grid;
-  grid-template-columns: 12px 3ch 1fr;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-dim);
+  line-height: 1.6;
 }
 
 .chart-tip-row strong {
-  color: var(--text);
+  flex: none;
+  min-width: 7.5ch;
   text-align: right;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
+.chart-tip-row > span:last-child {
+  flex: 1;
+}
+
 .chart-tip-key {
+  flex: none;
+  width: 12px;
   height: 2px;
   border-radius: 1px;
 }
