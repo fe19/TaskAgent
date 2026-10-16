@@ -99,3 +99,92 @@
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* Allowed websites: one chip per site, removable. Also used in the approval dialog. */
+.site-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+#sites-dialog-list .site-chip {
+  padding-right: 10px;
+}
+
+.site-remove {
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.site-remove:hover,
+.site-remove:focus-visible {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.site-empty {
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.site-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-add input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Web access card: checkboxes with a label and a hint. */
+.check-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.check-field input {
+  margin-top: 3px;
+}
+
+.check-field > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* While all websites are allowed, the list matters only for Copilot. */
+.field-hint[data-dimmed='true'] {
+  opacity: 0.6;
+}
+
+.locked-field {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}

@@ -150,7 +150,7 @@ test('validating a path without a resolver is a programming error', () => {
 });
 
 test('every spec entry has a validator type the validator understands', () => {
-  const known = new Set(['int', 'enum', 'bool', 'path', 'tools', 'list', 'env-names', 'assistant', 'urls', 'decimal']);
+  const known = new Set(['int', 'enum', 'bool', 'path', 'tools', 'list', 'env-names', 'assistant', 'urls', 'sites', 'decimal']);
   for (const [key, spec] of Object.entries(SETTING_SPEC)) {
     assert.ok(known.has(spec.type), `${key} has unhandled type ${spec.type}`);
   }
@@ -164,4 +164,9 @@ test('usd_per_aic accepts decimals within range and defaults to the list price',
   }
   assert.equal(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).usd_per_aic, 0.01);
   assert.equal(decodeSettings({ usd_per_aic: '0.02' }, { defaultWorkspaceRoot: '/x' }).usd_per_aic, 0.02);
+});
+
+test('all websites are not allowed by default', () => {
+  assert.equal(decodeSettings({}, { defaultWorkspaceRoot: '/x' }).allow_all_websites, false);
+  assert.deepEqual(validateSettings({ allow_all_websites: true }).values, { allow_all_websites: 'true' });
 });

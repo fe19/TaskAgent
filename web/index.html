@@ -152,6 +152,63 @@
           </form>
         </section>
 
+        <section class="card" aria-labelledby="web-h">
+          <div class="card-head">
+            <h2 id="web-h">Web access</h2>
+          </div>
+          <form id="web-form" class="form">
+            <label class="check-field">
+              <input type="checkbox" name="allow_all_websites" />
+              <span>
+                <span class="tool-label">Allow all websites</span>
+                <span class="tool-hint" id="allow-all-hint">
+                  Every site except the blocked ones, for the web tool and shell commands.
+                </span>
+              </span>
+            </label>
+
+            <label class="check-field">
+              <input type="checkbox" name="web_tool" />
+              <span>
+                <span class="tool-label">Agents may use their web tool</span>
+                <span class="tool-hint">Fetch pages from allowed websites. Shell commands such as curl reach them either way.</span>
+              </span>
+            </label>
+
+            <div class="field">
+              <span class="field-label" id="allowed-sites-label">Allowed websites</span>
+              <ul class="site-chips" id="allowed-sites" aria-labelledby="allowed-sites-label"></ul>
+              <div class="site-add">
+                <input type="text" id="site-input" spellcheck="false" aria-label="Website to allow"
+                       placeholder="e.g. www.bbc.co.uk or registry.npmjs.org" />
+                <button type="button" class="btn btn-ghost btn-sm" id="site-add">Add</button>
+              </div>
+              <span class="field-hint" id="allowed-sites-hint">
+                A site covers all its pages: www.bbc.co.uk allows www.bbc.co.uk/news. Copilot also reaches
+                its own servers. A broad site such as github.com can be used to send data out.
+              </span>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Blocked websites</span>
+              <input
+                type="text"
+                name="blocked_urls"
+                spellcheck="false"
+                placeholder="e.g. example.com, https://*.example.org"
+              />
+              <span class="field-hint">
+                Comma separated. Always blocked, even when all websites are allowed.
+              </span>
+            </label>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="web-save">Save web access</button>
+              <span class="save-note" id="web-note" aria-live="polite"></span>
+            </div>
+          </form>
+        </section>
+
         <section class="card" aria-labelledby="perm-h">
           <div class="card-head">
             <h2 id="perm-h">Permissions</h2>
@@ -159,9 +216,9 @@
           </div>
           <form id="permissions-form" class="form">
             <p class="perm-warning" id="perm-warning" role="alert" hidden>
-              GitHub Copilot’s shell is not sandboxed. With “Run shell commands” on, its agents can read and
-              change anything your user account can, such as ~/.ssh. Use Claude Code or turn the shell off
-              for untrusted work.
+              GitHub Copilot runs inside Anthropic’s sandbox-runtime (srt), which must be installed
+              (npm install -g @anthropic-ai/sandbox-runtime). This setup is not yet verified with the real
+              Copilot CLI: if Copilot can’t sign in or connect inside the sandbox, its runs fail.
             </p>
             <div class="field">
               <span class="field-label">Tools agents may use</span>
@@ -185,39 +242,6 @@
               </span>
             </label>
 
-            <label class="field">
-              <span class="field-label">Blocked websites</span>
-              <input
-                type="text"
-                name="blocked_urls"
-                spellcheck="false"
-                placeholder="e.g. example.com, https://*.example.org"
-              />
-              <span class="field-hint">
-                Comma separated domains or URLs. Blocks web access and shell commands such as curl.
-              </span>
-            </label>
-
-            <label class="field">
-              <span class="field-label">Websites shell commands may reach (Claude Code)</span>
-              <input
-                type="text"
-                name="shell_allowed_domains"
-                spellcheck="false"
-                placeholder="e.g. registry.npmjs.org, pypi.org"
-              />
-              <span class="field-hint">
-                Claude Code runs shell commands in a sandbox with no network except these domains.
-                Empty: no network for shell commands. Allow only what tasks need; a broad domain such
-                as github.com can be used to send data out.
-              </span>
-            </label>
-
-            <div class="field">
-              <span class="field-label">Always enforced</span>
-              <ul class="locked-list" id="perm-locked"></ul>
-            </div>
-
             <div class="form-actions">
               <button type="submit" class="btn btn-primary" id="permissions-save">
                 Save permissions
@@ -225,6 +249,11 @@
               <span class="save-note" id="permissions-note" aria-live="polite"></span>
             </div>
           </form>
+
+          <div class="field locked-field">
+            <span class="field-label">Always enforced</span>
+            <ul class="locked-list" id="perm-locked"></ul>
+          </div>
         </section>
 
         <section class="card" aria-labelledby="env-h">
@@ -396,7 +425,7 @@
     <dialog id="run-dialog" class="dialog">
       <div class="dialog-head">
         <h3 id="run-dialog-title">Agent detail</h3>
-        <button type="button" class="btn btn-ghost" id="run-dialog-close">Close</button>
+        <button type="button" class="dialog-close" id="run-dialog-close" aria-label="Close" title="Close">&times;</button>
       </div>
       <div id="run-dialog-body" class="dialog-body"></div>
     </dialog>
@@ -404,7 +433,7 @@
     <dialog id="task-dialog" class="dialog dialog-narrow" aria-labelledby="task-dialog-title">
       <div class="dialog-head">
         <h3 id="task-dialog-title">New task</h3>
-        <button type="button" class="btn btn-ghost" id="task-dialog-close">Close</button>
+        <button type="button" class="dialog-close" id="task-dialog-close" aria-label="Close" title="Close">&times;</button>
       </div>
       <div class="dialog-body">
         <form id="task-form" class="form">
@@ -447,6 +476,26 @@
             <button type="submit" class="btn btn-primary" id="task-submit">Add to queue</button>
           </div>
         </form>
+      </div>
+    </dialog>
+
+    <dialog id="sites-dialog" class="dialog dialog-narrow" aria-labelledby="sites-dialog-title">
+      <div class="dialog-head">
+        <h3 id="sites-dialog-title">Allow website access?</h3>
+      </div>
+      <div class="dialog-body">
+        <p id="sites-dialog-text">This task needs websites that are not allowed:</p>
+        <ul class="site-chips" id="sites-dialog-list"></ul>
+        <p class="field-hint">
+          Allowing a site allows all of its pages. The agent can then fetch it with its web tool and
+          with shell commands such as curl.
+        </p>
+        <div class="sites-actions">
+          <button type="button" class="btn btn-primary" data-choice="task">Allow for this task</button>
+          <button type="button" class="btn btn-ghost" data-choice="permanent">Add to allowed websites</button>
+          <button type="button" class="btn btn-ghost" data-choice="skip" id="sites-skip">Continue without</button>
+          <button type="button" class="btn btn-ghost" data-choice="">Cancel</button>
+        </div>
       </div>
     </dialog>
 

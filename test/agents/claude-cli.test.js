@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArgs, buildEnv, interpret, parseEvent, parseRateLimits, sandboxSettings, toolArgs } from '../../src/agents/claude-cli.js';
+import { blockedSitesIn, buildArgs, buildEnv, interpret, parseEvent, parseRateLimits, sandboxSettings, toolArgs } from '../../src/agents/claude-cli.js';
 
 const base = {
   prompt: 'do a thing',
@@ -59,7 +59,7 @@ test('shell commands run in a strict OS sandbox, passed as CLI settings', () => 
       autoAllowBashIfSandboxed: true,
       allowUnsandboxedCommands: false,
       failIfUnavailable: true,
-      filesystem: { denyRead: ['~/'], allowRead: ['/tmp/ws/run-1', '/tmp/ws'] },
+      filesystem: { denyRead: ['~/'], allowRead: ['/tmp/ws/run-1'] },
       network: { allowedDomains: [], deniedDomains: [], strictAllowlist: true },
     },
   });
@@ -73,8 +73,8 @@ test('the sandbox reaches only allowed websites; blocked ones stay blocked', () 
   assert.deepEqual(network, { allowedDomains: ['registry.npmjs.org', '*.pypi.org'], deniedDomains: ['evil.org'], strictAllowlist: true });
 });
 
-test('without a shared root the sandbox reads only the run workspace', () => {
-  assert.deepEqual(sandboxSettings({}, { workspace: '/w/run', workspaceRoot: null }).sandbox.filesystem.allowRead, ['/w/run']);
+test('the sandbox reads only the run workspace, never the shared working directory', () => {
+  assert.deepEqual(sandboxSettings({}, { workspace: '/w/run', workspaceRoot: '/w' }).sandbox.filesystem.allowRead, ['/w/run']);
 });
 
 test('effort is passed unless it is the model default', () => {
@@ -82,9 +82,8 @@ test('effort is passed unless it is the model default', () => {
   assert.deepEqual(values(buildArgs({ ...base, reasoningEffort: 'xhigh' }), '--effort'), ['xhigh']);
 });
 
-test('the shared root is added only when given', () => {
-  assert.deepEqual(values(buildArgs(base), '--add-dir'), ['/tmp/ws']);
-  assert.ok(!buildArgs({ ...base, workspaceRoot: null }).includes('--add-dir'));
+test('no other directory is added: runs can\'t read each other\'s workspaces', () => {
+  assert.ok(!buildArgs(base).includes('--add-dir'));
 });
 
 test('only the selected tools exist, mapped to Claude Code names', () => {
@@ -94,9 +93,9 @@ test('only the selected tools exist, mapped to Claude Code names', () => {
   assert.deepEqual(values(web, '--tools'), ['WebFetch,WebSearch']);
 });
 
-test('file tools are allowed only inside the workspace and the shared root', () => {
-  const allowed = values(toolArgs({ allowed_tools: ['view', 'create', 'edit', 'bash'] }, { workspace: '/w/run', workspaceRoot: '/w' }), '--allowedTools');
-  assert.deepEqual(allowed, ['Read(//w/run/**)', 'Read(//w/**)', 'Edit(//w/run/**)', 'Edit(//w/**)', 'Bash']);
+test('file tools are allowed only inside the run workspace', () => {
+  const allowed = values(toolArgs({ allowed_tools: ['view', 'create', 'edit', 'bash'] }, { workspace: '/w/run' }), '--allowedTools');
+  assert.deepEqual(allowed, ['Read(//w/run/**)', 'Edit(//w/run/**)', 'Bash']);
 });
 
 test('core and operator denies become Bash rules; blocked sites become WebFetch domain rules', () => {
@@ -178,7 +177,7 @@ test('an assistant message yields thinking, tool calls and the text as activitie
 test('a failed tool result is reported', () => {
   const facts = interpret({ type: 'user', message: { content: [{ type: 'tool_result', is_error: true }] } });
   assert.equal(facts.activities[0].summary, 'Tool call failed');
-  assert.deepEqual(interpret({ type: 'user', message: { content: [{ type: 'tool_result' }] } }), {});
+  assert.equal(interpret({ type: 'user', message: { content: [{ type: 'tool_result' }] } }).activities, undefined, 'no failure reported');
 });
 
 test('the result carries usage, cost and the final answer', () => {
@@ -252,4 +251,41 @@ test('without unified windows the single reported window is used', () => {
   });
   assert.equal(parseRateLimits(null), null);
   assert.deepEqual(interpret({ type: 'rate_limit_event' }), {});
+});
+
+test('blocked websites are read from the sandbox and web tool messages', () => {
+  assert.deepEqual(
+    blockedSitesIn('curl: (56)\n<sandbox_violations>\ndeny network-outbound www.bbc.co.uk:443 (host is not on the allow list)\n</sandbox_violations>'),
+    ['www.bbc.co.uk'],
+  );
+  assert.deepEqual(blockedSitesIn('Claude Code is unable to fetch from www.bbc.co.uk'), [], 'the site refused the fetcher; allowing would not help');
+  assert.deepEqual(blockedSitesIn('all good'), []);
+  const facts = interpret({ type: 'user', message: { content: [{ type: 'tool_result', is_error: true, content: [{ type: 'text', text: 'deny network-outbound pypi.org:443' }] }] } });
+  assert.deepEqual(facts.blockedSites, ['pypi.org']);
+});
+
+test('the web tool may fetch only the allowed websites', () => {
+  const allowed = values(toolArgs({ allowed_tools: ['web_fetch'], shell_allowed_domains: ['www.bbc.co.uk', 'pypi.org'] }, { workspace: '/w' }), '--allowedTools');
+  assert.deepEqual(allowed, ['WebFetch(domain:www.bbc.co.uk)', 'WebFetch(domain:pypi.org)', 'WebSearch']);
+  assert.deepEqual(values(toolArgs({ allowed_tools: ['web_fetch'] }, { workspace: '/w' }), '--allowedTools'), ['WebSearch'], 'none allowed: no fetch');
+});
+
+test('allowing all websites opens the sandbox and the web tool; blocked ones stay blocked', () => {
+  const permissions = { allowed_tools: ['web_fetch'], allow_all_websites: true, blocked_urls: ['evil.org'] };
+  const { network } = sandboxSettings(permissions, { workspace: '/w' }).sandbox;
+  assert.deepEqual(network.allowedDomains, ['*']);
+  assert.deepEqual(network.deniedDomains, ['evil.org']);
+  const args = toolArgs(permissions, { workspace: '/w' });
+  assert.deepEqual(values(args, '--allowedTools'), ['WebFetch(domain:*)', 'WebSearch']);
+  assert.ok(values(args, '--disallowedTools').includes('WebFetch(domain:evil.org)'));
+});
+
+test('tool calls report the sites they target and whether they worked', () => {
+  const start = interpret({ type: 'assistant', message: { content: [
+    { type: 'tool_use', id: 'a', name: 'WebFetch', input: { url: 'https://www.bbc.co.uk/news' } },
+    { type: 'tool_use', id: 'b', name: 'Bash', input: { command: 'ls -la' } },
+  ] } });
+  assert.deepEqual(start.toolStarts, [{ id: 'a', sites: ['www.bbc.co.uk'] }, { id: 'b', sites: [] }]);
+  const end = interpret({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'a', content: 'ok' }] } });
+  assert.deepEqual(end.toolEnds, [{ id: 'a', failed: false }]);
 });

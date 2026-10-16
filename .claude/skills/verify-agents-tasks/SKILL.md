@@ -6,7 +6,9 @@ description: How to test and verify a change to Agents Tasks (this repo) — the
 # Verifying Agents Tasks
 
 Nothing here needs the real `copilot`, `claude` or `gh`, network access or an account: the
-fixtures `test/fixtures/fake-copilot.mjs`, `fake-claude.mjs` and `fake-gh.mjs` stand in for them.
+fixtures `test/fixtures/fake-copilot.mjs`, `fake-claude.mjs`, `fake-gh.mjs` and `fake-srt.mjs`
+(which records the sandbox policy as `srt-policy.json` but does not sandbox) stand in for them.
+To exercise the real sandbox without installing it, run `npx -y @anthropic-ai/sandbox-runtime`.
 
 ## 1. Test suite (always)
 

@@ -1,5 +1,9 @@
-import { permissionArgs } from '../domain/permissions.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { parseList, permissionArgs, urlHost } from '../domain/permissions.js';
 import { agentEnvironment } from '../domain/environment.js';
+import { installRoot, resolveBinary, sandboxPolicy } from './os-sandbox.js';
+import { toolCallSites } from '../domain/web-access.js';
 
 /** Copilot CLI adapter: argv, env and JSONL events. Swap this file to support another agent backend. */
 
@@ -7,7 +11,6 @@ import { agentEnvironment } from '../domain/environment.js';
 export function buildArgs({
   prompt,
   workspace,
-  workspaceRoot,
   model,
   sessionId,
   reasoningEffort,
@@ -32,13 +35,34 @@ export function buildArgs({
     '--disable-builtin-mcps',
     ...permissionArgs(permissions),
   ];
-  // Lets agents read/write the whole working directory without approval prompts.
-  if (workspaceRoot) args.push('--add-dir', workspaceRoot);
   // "default" omits the flag; several models reject it.
   if (reasoningEffort && reasoningEffort !== 'default') {
     args.push('--reasoning-effort', reasoningEffort);
   }
   return args;
+}
+
+/**
+ * What the Copilot CLI itself must reach: its API and GitHub sign-in. From GitHub's documented
+ * endpoints, not yet verified against the real CLI. Its shell can reach these too.
+ */
+export const COPILOT_DOMAINS = ['api.githubcopilot.com', '*.githubcopilot.com', 'api.github.com', 'github.com', '*.githubusercontent.com'];
+
+/**
+ * Copilot has no sandbox of its own, so the whole CLI runs in one (os-sandbox.js). Besides the
+ * run workspace it may read and write its own folder (config, sign-in, session store) and read
+ * where it and node are installed; the network reaches Copilot plus the allowed websites.
+ */
+export function osSandbox(permissions = {}, { workspace, bin, env = process.env, home = homedir() } = {}) {
+  const copilotHome = env.COPILOT_HOME || join(home, '.copilot');
+  const installs = [installRoot(resolveBinary(bin, env.PATH), home), installRoot(resolveBinary('node', env.PATH), home)];
+  return sandboxPolicy({
+    workspace,
+    readable: [copilotHome, ...new Set(installs.filter(Boolean))],
+    writable: [copilotHome],
+    allowedDomains: [...COPILOT_DOMAINS, ...parseList(permissions.shell_allowed_domains).map(urlHost)],
+    deniedDomains: parseList(permissions.blocked_urls).map(urlHost),
+  });
 }
 
 /**
@@ -151,6 +175,8 @@ export const copilotAdapter = {
   defaultBin: 'copilot',
   // Token usage lands in the CLI's session store after exit (store/copilot-usage.js).
   pollsUsage: true,
+  // Runs the whole CLI inside sandbox-runtime; see osSandbox.
+  osSandbox,
   model: (settings) => settings.model,
   effort: (settings) => settings.reasoning_effort,
   buildArgs,
@@ -161,7 +187,13 @@ export const copilotAdapter = {
     const out = {};
     const summary = summarizeEvent(evt);
     if (summary?.summary) out.activities = [{ kind: summary.kind, summary: summary.summary }];
-    if (evt.type === 'tool.execution_start') out.toolCalls = 1;
+    if (evt.type === 'tool.execution_start') {
+      out.toolCalls = 1;
+      out.toolStarts = [{ id: evt.data?.toolCallId, sites: toolCallSites(evt.data?.arguments) }];
+    }
+    if (evt.type === 'tool.execution_complete') {
+      out.toolEnds = [{ id: evt.data?.toolCallId, failed: evt.data?.success === false }];
+    }
     if (evt.type === 'assistant.message') {
       const text = typeof evt.data?.content === 'string' ? evt.data.content.trim() : '';
       if (text) out.message = text;

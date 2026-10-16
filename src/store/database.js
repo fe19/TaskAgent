@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   held       INTEGER NOT NULL DEFAULT 0,
   run_at     TEXT,
   repeat     TEXT,
+  allowed_sites TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -45,6 +46,8 @@ CREATE TABLE IF NOT EXISTS runs (
   files_modified   TEXT,
   result_text      TEXT,
   result_path      TEXT,
+  blocked_sites    TEXT NOT NULL DEFAULT '',
+  accessed_sites   TEXT NOT NULL DEFAULT '',
   started_at       TEXT NOT NULL DEFAULT (datetime('now')),
   finished_at      TEXT
 );
@@ -101,6 +104,8 @@ export const DEFAULT_SETTINGS = {
   blocked_urls: '',
   // Empty: Claude Code's sandboxed shell reaches no website until one is allowed.
   shell_allowed_domains: '',
+  // Off: agents reach only the allowed websites.
+  allow_all_websites: 'false',
   secret_env_vars: '',
   // Only the allow-list in domain/environment.js reaches agents unless named here.
   passed_env_vars: '',
@@ -121,6 +126,10 @@ export function openDatabase(file) {
   // Added with scheduling: when a task starts (UTC ISO) and how it repeats (domain/schedule.js).
   addColumn(db, 'tasks', 'run_at', 'TEXT');
   addColumn(db, 'tasks', 'repeat', 'TEXT');
+  // Added with web access: sites allowed for one task only, and sites a run was blocked from.
+  addColumn(db, 'tasks', 'allowed_sites', "TEXT NOT NULL DEFAULT ''");
+  addColumn(db, 'runs', 'blocked_sites', "TEXT NOT NULL DEFAULT ''");
+  addColumn(db, 'runs', 'accessed_sites', "TEXT NOT NULL DEFAULT ''");
 
   const seed = db.prepare(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING',

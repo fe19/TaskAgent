@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  COPILOT_DOMAINS,
+  copilotAdapter,
+  osSandbox,
   buildArgs,
   buildEnv,
   isReasoningEffortRejection,
@@ -55,9 +58,10 @@ test('permission flags are included in the argv', () => {
   assert.ok(args.includes('shell(curl)'));
 });
 
-test('the agent working directory is added as an allowed path', () => {
-  assert.equal(valueOf(buildArgs({ ...base, workspaceRoot: '/tmp/ws' }), '--add-dir'), '/tmp/ws');
-  assert.ok(!buildArgs(base).includes('--add-dir'));
+test('a run works only in its own workspace; no other directory is added', () => {
+  const args = buildArgs({ ...base, workspaceRoot: '/tmp/ws' });
+  assert.equal(valueOf(args, '-C'), base.workspace);
+  assert.ok(!args.includes('--add-dir'));
 });
 
 test('omitting permissions does not throw', () => {
@@ -232,4 +236,31 @@ test('metrics the CLI did not report are null, never zero', () => {
     linesRemoved: null,
     filesModified: null,
   });
+});
+
+test('Copilot runs in a sandbox: its own folder, its API and the allowed websites only', () => {
+  const policy = osSandbox(
+    { shell_allowed_domains: ['https://registry.npmjs.org/'], blocked_urls: ['evil.org'] },
+    { workspace: '/w/run', bin: '/nonexistent/copilot', env: { PATH: '' }, home: '/Users/me' },
+  );
+  assert.deepEqual(policy.filesystem, {
+    denyRead: ['~/'],
+    allowRead: ['/w/run', '/Users/me/.copilot'],
+    allowWrite: ['/w/run', '/Users/me/.copilot'],
+    denyWrite: [],
+  });
+  assert.deepEqual(policy.network.allowedDomains, [...COPILOT_DOMAINS, 'registry.npmjs.org']);
+  assert.deepEqual(policy.network.deniedDomains, ['evil.org']);
+});
+
+test('COPILOT_HOME moves the folder Copilot may use', () => {
+  const policy = osSandbox({}, { workspace: '/w', bin: 'copilot', env: { PATH: '', COPILOT_HOME: '/data/copilot' }, home: '/Users/me' });
+  assert.deepEqual(policy.filesystem.allowWrite, ['/w', '/data/copilot']);
+});
+
+test('a Copilot tool call reports the sites it targets, and whether it failed', () => {
+  const start = copilotAdapter.interpret({ type: 'tool.execution_start', data: { toolCallId: 't9', toolName: 'bash', arguments: { command: 'curl https://www.bbc.co.uk/news' } } });
+  assert.deepEqual(start.toolStarts, [{ id: 't9', sites: ['www.bbc.co.uk'] }]);
+  assert.deepEqual(copilotAdapter.interpret({ type: 'tool.execution_complete', data: { toolCallId: 't9', success: false } }).toolEnds, [{ id: 't9', failed: true }]);
+  assert.deepEqual(copilotAdapter.interpret({ type: 'tool.execution_complete', data: { toolCallId: 't9', success: true } }).toolEnds, [{ id: 't9', failed: false }]);
 });

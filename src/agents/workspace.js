@@ -1,4 +1,4 @@
-import { mkdirSync, accessSync, existsSync, statSync, constants } from 'node:fs';
+import { mkdirSync, accessSync, statSync, constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 
@@ -51,17 +51,4 @@ export function createWorkspace(root, { taskId, sessionId }) {
   const dir = join(root, `task-${taskId}-${sessionId.slice(0, 8)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
-
-/** Where the CLI loads project skills and custom agents from. */
-const TRUSTED_CONFIG_DIRS = [
-  ['.github', 'skills'],
-  ['.github', 'agents'],
-  ['.agents', 'skills'],
-  ['.claude', 'skills'],
-];
-
-/** `--add-dir` would load these as trusted; refuse a root an agent may have seeded. */
-export function hasTrustedConfig(root) {
-  return TRUSTED_CONFIG_DIRS.some((parts) => existsSync(join(root, ...parts)));
 }

@@ -6,11 +6,8 @@ const actionButton = (action, id, label, symbol, extra = '') =>
   `<button class="tile-btn" data-action="${action}" data-id="${id}"
            title="${esc(label)}" aria-label="${esc(label)}"${extra}>${symbol}</button>`;
 
-const TRASH_ICON =
-  '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.8 6.8v4M9.2 6.8v4"/></svg>';
-
 const DELETE = (id, confirm) =>
-  actionButton('delete-task', id, 'Delete this task', TRASH_ICON,
+  actionButton('delete-task', id, 'Delete this task', '&times;',
     `${confirm ? ` data-confirm="${esc(confirm)}"` : ''} data-variant="danger"`);
 
 const ASSISTANT_TAG = { copilot: 'Copilot', 'claude-code': 'Claude Code' };
@@ -20,6 +17,7 @@ const modelTag = (model, assistant) =>
     ? `<span class="tile-model" title="${esc(ASSISTANT_TAG[assistant] ?? assistant ?? 'Model')}: ${esc(model)}">${esc(model.replace(/^claude-/, ''))}</span>`
     : '';
 
+const STOP = (runId) => actionButton('stop-run', runId, 'Stop this agent', '&times;', ' data-variant="danger"');
 const RETRY = (id) => actionButton('requeue-task', id, 'Retry: move back to the queue', '&#x21bb;');
 const START = (id) => actionButton('start-task', id, 'Start this task', '&#x25b6;');
 
@@ -96,10 +94,11 @@ export function strandedTile(task) {
 }
 
 /** A finished run whose subtitle is its token count ("16k tokens"). */
-const hasTokenCount = (run) => !isLive(run.status) && !isFailure(run.status) && Boolean(run.usage);
+const hasTokenCount = (run) => !isLive(run.status) && !isFailure(run.status) && Boolean(run.usage) && !run.blocked_sites?.length;
 
 function runSubtitle(run) {
   if (isLive(run.status)) return run.current_activity || 'Starting…';
+  if (run.blocked_sites?.length) return `Blocked: ${run.blocked_sites.join(', ')}`;
   if (isFailure(run.status)) return run.error || OUTCOME_WORD[run.status] || run.status;
   return run.usage ? `${formatNumber(run.usage.total_tokens)} tokens` : 'no usage reported';
 }
@@ -125,16 +124,8 @@ export function runTile(run, { canRetry = false, copyOnDrag = false } = {}) {
     buttons: [
       !live && run.has_result ? DOWNLOAD(run.id) : '',
       canRetry && !live ? RETRY(run.task_id) : '',
-      DELETE(
-        run.task_id,
-        live
-          ? 'Stop this agent and delete the task with its run history?'
-          : 'Delete this task with all of its runs and results?',
-      ),
+      // A running tile's one × stops the agent; the task is deleted once finished.
+      live ? STOP(run.id) : DELETE(run.task_id, 'Delete this task with all of its runs and results?'),
     ],
-    foot: live
-      ? `<button class="tile-x" data-action="stop-run" data-id="${run.id}"
-                 title="Stop this agent" aria-label="Stop this agent">&times;</button>`
-      : '',
   });
 }

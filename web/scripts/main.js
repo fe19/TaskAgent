@@ -6,6 +6,7 @@ import { startClock } from './clock.js';
 import * as actions from './actions.js';
 import * as settingsView from './views/settings.js';
 import * as permissionsView from './views/permissions.js';
+import * as webAccessView from './views/web-access.js';
 import * as environmentView from './views/environment.js';
 import * as taskForm from './views/task-form.js';
 import * as dispatchView from './views/dispatch.js';
@@ -22,13 +23,14 @@ import * as tabs from './views/tabs.js';
 const POLL_MS = 10000;
 
 // Monitoring before tabs: it must be listening when the tabs open #monitoring on load.
-const VIEWS = [sidebar, settingsView, permissionsView, environmentView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions, monitoring, tabs];
+const VIEWS = [sidebar, settingsView, permissionsView, webAccessView, environmentView, taskForm, dispatchView, runDialog, resources, quota, dragDrop, actions, monitoring, tabs];
 
 async function reloadSettings() {
   const { settings, spec, permissions, environment } = await get('/api/settings');
   Object.assign(state, { settings, spec, permissionMeta: permissions, environmentMeta: environment });
   settingsView.render();
   permissionsView.render();
+  webAccessView.render();
   environmentView.render();
   dispatchView.render();
   // Shows the selected assistant's allowance; the price per AIC converts Copilot's to dollars.

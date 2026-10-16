@@ -4,6 +4,7 @@ import { esc } from '../format.js';
 import { get, put } from '../api-client.js';
 import { renderDetail, renderTaskDetail } from './run-detail.js';
 import { readSchedule } from './schedule-fields.js';
+import { checkPromptSites } from './site-approval.js';
 import { isLive } from '/domain/run-status.js';
 
 // Follow new activity only while the reader is near the bottom.
@@ -79,9 +80,15 @@ async function saveTask(event, refreshBoard) {
   button.disabled = true;
   try {
     const schedule = readSchedule(form);
+    const allowedSites = await checkPromptSites(form.elements.prompt.value, task.allowed_sites ?? []);
+    if (allowedSites === null) {
+      button.disabled = false;
+      return; // cancelled: keep editing
+    }
     const { task: saved } = await put(`/api/tasks/${task.id}`, {
       prompt: form.elements.prompt.value,
       priority: task.priority,
+      allowed_sites: allowedSites,
       ...schedule,
     });
     // A server started before scheduling existed accepts the edit but drops the time.

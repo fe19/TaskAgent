@@ -30,6 +30,7 @@ http/ (any UI)  →  actions, presenters  →  agents/  →  store/  →  domain
 - `domain/` does no I/O.
 - Only `store/` contains SQL.
 - Only the adapters (`agents/copilot-cli.js`, `agents/claude-cli.js`) know a CLI's argv, environment and event format.
+- An adapter with `osSandbox(settings, { workspace, bin })` has its whole CLI started inside Anthropic's sandbox-runtime (`agents/os-sandbox.js`); Claude Code instead passes its built-in sandbox settings. Either way each run sees only its own workspace.
 - `AgentRun` drives whichever adapter `agents/assistants.js` returns for the `assistant` setting; the scheduler reads it when a task starts.
 - Two things start tasks: the `Scheduler` fills free slots (Auto mode, or ▶), and the `TaskClock` (`agents/task-clock.js`) starts scheduled tasks whose `run_at` has come, in either mode, and requeues a repeating task for its next occurrence after each run. `claimNext` never takes a task before its `run_at`.
 - Dependencies are passed in by `control-room.js`, so each layer is testable alone.

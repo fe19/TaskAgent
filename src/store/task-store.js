@@ -1,5 +1,7 @@
 import { TASK_STATUSES } from '../domain/run-status.js';
 import { nextOccurrence, validateSchedule } from '../domain/schedule.js';
+import { mergeSites, siteOf } from '../domain/web-access.js';
+import { parseList } from '../domain/permissions.js';
 import { badRequest } from '../errors.js';
 
 const MAX_PROMPT_CHARS = 10000;
@@ -21,7 +23,7 @@ const DUE = '(run_at IS NULL OR run_at <= ?)';
 
 export function createTaskStore({ db, now = () => Date.now() }) {
   const statements = {
-    insert: db.prepare('INSERT INTO tasks (title, prompt, priority, run_at, repeat) VALUES (?, ?, ?, ?, ?)'),
+    insert: db.prepare('INSERT INTO tasks (title, prompt, priority, run_at, repeat, allowed_sites) VALUES (?, ?, ?, ?, ?, ?)'),
     get: db.prepare('SELECT * FROM tasks WHERE id = ?'),
     list: db.prepare(
       `SELECT t.*,
@@ -37,10 +39,11 @@ export function createTaskStore({ db, now = () => Date.now() }) {
     remove: db.prepare('DELETE FROM tasks WHERE id = ?'),
     // Guarded on status, so an edit can never race the scheduler's claim.
     editQueued: db.prepare(
-      `UPDATE tasks SET title = ?, prompt = ?, priority = ?, run_at = ?, repeat = ?,
+      `UPDATE tasks SET title = ?, prompt = ?, priority = ?, run_at = ?, repeat = ?, allowed_sites = ?,
                         updated_at = datetime('now')
         WHERE id = ? AND status = 'queued' RETURNING *`,
     ),
+    setSites: db.prepare("UPDATE tasks SET allowed_sites = ?, updated_at = datetime('now') WHERE id = ? RETURNING *"),
     hold: db.prepare(
       "UPDATE tasks SET status = 'queued', held = 1, run_at = ?, updated_at = datetime('now') WHERE id = ?",
     ),
@@ -114,14 +117,34 @@ export function createTaskStore({ db, now = () => Date.now() }) {
     return Date.parse(task.run_at) > now() ? task.run_at : null;
   }
 
+  /** Sites allowed for this task only, as stored text. Missing input keeps `current`. */
+  function validateSites(input, current = '') {
+    if (input.allowed_sites === undefined) return current;
+    const invalid = parseList(input.allowed_sites).filter((entry) => !siteOf(entry));
+    if (invalid.length > 0) throw badRequest(`allowed_sites contains invalid websites: ${invalid.join(', ')}`);
+    return mergeSites(parseList(input.allowed_sites)).join(',');
+  }
+
   function create(input) {
-    const { lastInsertRowid } = statements.insert.run(...validate(input), ...validateWhen(input));
+    const { lastInsertRowid } = statements.insert.run(...validate(input), ...validateWhen(input), validateSites(input));
     return get(Number(lastInsertRowid));
   }
 
   /** Rewrites a queued task; null once it has left the queue. */
   function editQueued(id, input) {
-    return statements.editQueued.get(...validate(input), ...validateWhen(input, get(id)), id) ?? null;
+    const current = get(id);
+    return (
+      statements.editQueued.get(...validate(input), ...validateWhen(input, current), validateSites(input, current?.allowed_sites), id) ??
+      null
+    );
+  }
+
+  /** Adds sites this task may reach, in any state (e.g. before a retry). */
+  function allowSites(id, sites) {
+    const current = get(id);
+    if (!current) return null;
+    const added = validateSites({ allowed_sites: parseList(sites) });
+    return statements.setSites.get(mergeSites(parseList(current.allowed_sites), parseList(added)).join(','), id);
   }
 
   function setStatus(id, status) {
@@ -159,5 +182,6 @@ export function createTaskStore({ db, now = () => Date.now() }) {
     listDue: () => statements.listDue.all(new Date(now()).toISOString()),
     /** Back to the queue, waiting for `runAt`. */
     reschedule: (id, runAt) => statements.reschedule.get(runAt, id) ?? null,
+    allowSites,
   };
 }

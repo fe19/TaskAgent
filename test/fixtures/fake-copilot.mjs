@@ -67,6 +67,8 @@ if (prompt.includes('HANG')) {
   writeFileSync(`${process.cwd()}/out.txt`, 'hello\n');
   // Names only, so tests can check what the agent's environment holds.
   writeFileSync(`${process.cwd()}/env-names.json`, JSON.stringify(Object.keys(process.env)));
+  // The arguments too, so tests can check what the agent was given access to.
+  writeFileSync(`${process.cwd()}/argv.json`, JSON.stringify(argv));
   emit('tool.execution_complete', {
     toolCallId: 't1',
     success: true,

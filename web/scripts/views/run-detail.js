@@ -157,14 +157,50 @@ function renderActions(run, live, showMeta) {
     </div>`;
 }
 
+/** The websites a run reached, and those it was refused. */
+function renderWebsites(run, live) {
+  const accessed = run.accessed_sites ?? [];
+  const blocked = run.blocked_sites ?? [];
+  if (accessed.length === 0 && blocked.length === 0) {
+    return note(live ? 'No websites accessed yet.' : 'No websites accessed.');
+  }
+  const chips = (sites, kind) =>
+    sites.map((s) => `<li class="site-chip"${kind ? ` data-kind="${kind}"` : ''}>${esc(s)}</li>`).join('');
+  return `<ul class="site-chips run-sites" aria-label="Websites">${chips(accessed, '')}${chips(blocked, 'blocked')}</ul>
+    ${blocked.length ? '<p class="field-hint">Red: refused, because the site is not allowed.</p>' : ''}`;
+}
+
+/** A finished run that was refused websites: name them and offer to allow them and retry. */
+function renderBlockedSites(run, live) {
+  const sites = run.blocked_sites ?? [];
+  if (live || sites.length === 0) return '';
+  const list = esc(sites.join(','));
+  return `
+    <div class="blocked-sites">
+      <p><strong>Blocked websites:</strong> ${sites.map((s) => `<code>${esc(s)}</code>`).join(', ')}</p>
+      <p class="field-hint">The agent wanted these sites but they are not allowed. Allow them and run the task again:</p>
+      <div class="detail-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-action="allow-sites" data-id="${esc(run.task_id)}" data-sites="${list}">
+          Allow for this task and retry
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" data-action="allow-sites" data-id="${esc(run.task_id)}" data-sites="${list}" data-permanent="true">
+          Add to allowed websites and retry
+        </button>
+      </div>
+    </div>`;
+}
+
 export function renderDetail(run, events, { showMeta = false } = {}) {
   const live = isLive(run.status);
   return [
     run.error ? `<div class="agent-error">${esc(run.error)}</div>` : '',
+    renderBlockedSites(run, live),
     label('Prompt'),
     renderPrompt(run.task_prompt),
     label(resultLabel(run.status)),
     renderResult(run, live),
+    label('Websites'),
+    renderWebsites(run, live),
     renderActions(run, live, showMeta),
     `<div class="run-meta" id="run-meta"${showMeta ? '' : ' hidden'}>`,
     renderFacts(run, live),

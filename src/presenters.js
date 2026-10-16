@@ -40,6 +40,10 @@ export function presentRun(run, usage) {
     session_id: run.session_id,
     assistant: run.assistant,
     status: run.status,
+    // Sites the agent wanted but was not allowed to reach.
+    blocked_sites: listOf(run.blocked_sites),
+    // Sites the agent reached with its web tool or shell commands.
+    accessed_sites: listOf(run.accessed_sites),
     model: run.model,
     current_activity: run.current_activity,
     tool_calls: run.tool_calls,
@@ -82,8 +86,10 @@ export function presentLimits(limits, now = Date.now()) {
   return { available: true, limit_status: limits.status, windows, observed_at: limits.observed_at };
 }
 
+const listOf = (text) => String(text ?? '').split(',').filter(Boolean);
+
 export function presentTask(task) {
-  return { ...task, short_label: shortLabel(task.prompt, task.title) };
+  return { ...task, allowed_sites: listOf(task.allowed_sites), short_label: shortLabel(task.prompt, task.title) };
 }
 
 /** Board view of a run: result text omitted (can be large). */

@@ -277,36 +277,6 @@
   color: var(--danger);
 }
 
-.tile-x {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, background 0.12s;
-}
-
-.tile:hover .tile-x,
-.tile:focus-within .tile-x,
-.tile-x:focus-visible {
-  opacity: 1;
-}
-
-.tile-x:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
 .tile[data-outcome="succeeded"] .tile-sub,
 .tile[data-outcome="failed"] .tile-sub,
 .tile[data-outcome="timed_out"] .tile-sub,
@@ -356,14 +326,6 @@
 }
 
 @media (hover: none) {
-  .tile-x {
-    opacity: 1;
-  }
-
-  .tile:has(> .tile-x) .tile-row {
-    padding-right: 26px;
-  }
-
   .lane-add-keys {
     display: none;
   }
@@ -378,14 +340,10 @@
   .tile-actions {
     gap: 6px;
   }
+}
 
-  .tile-x {
-    width: 28px;
-    height: 28px;
-    font-size: 18px;
-  }
-
-  .tile:has(> .tile-x) .tile-row {
-    padding-right: 30px;
-  }
+/* × reads small at the icon size; give it the same weight as the other tile icons. */
+.tile-btn[data-action="delete-task"],
+.tile-btn[data-action="stop-run"] {
+  font-size: 17px;
 }

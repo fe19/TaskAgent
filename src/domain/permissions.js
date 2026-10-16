@@ -26,21 +26,21 @@ export const CORE_SECRET_ENV_VARS = ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB
 
 /** Shown read-only in the UI. Only what the process actually enforces; limits are stated too. */
 export const ENFORCED_GUARANTEES = [
-  'Each run gets a fresh throwaway workspace directory',
+  'Each run gets a fresh throwaway workspace and can use only that folder, not other runs’ folders',
   'MCP servers are disabled',
   'The workspace is never trusted, so its skills, plugins and hooks never load',
-  'Agents may access the whole working directory, unless it contains agent skills (.github, .agents or .claude) or custom agents',
   'Blocked commands are matched by their text, so they are a guard rail, not a boundary: a command such as sh -c "git push" is not caught',
 ];
 
 /** Guarantees that depend on what the assistant's CLI can enforce. */
 const ASSISTANT_GUARANTEES = {
   copilot: [
-    'Shell commands are NOT sandboxed: with "Run shell commands" on, an agent can read and change anything your user account can (for example ~/.ssh) and use git on any repository',
-    'Blocked websites apply to web access and to shell commands such as curl; every other site is reachable',
+    'The whole Copilot CLI runs in an OS sandbox (Anthropic sandbox-runtime): it can write only in the run workspace and its own ~/.copilot folder, cannot read the rest of your home folder (for example ~/.ssh), and reaches only Copilot’s servers plus the websites you allow',
+    'Not yet verified with the real Copilot CLI. Copilot and its shell share the sandbox, so shell commands can also reach Copilot’s servers (including github.com) and ~/.copilot',
+    'Without sandbox-runtime (srt) installed, Copilot runs fail instead of running unsandboxed',
   ],
   'claude-code': [
-    'Shell commands run in an OS sandbox: they can write only in the run workspace and working directory, cannot read the rest of your home folder (for example ~/.ssh), and cannot run unsandboxed',
+    'Shell commands run in an OS sandbox: they can write only in the run workspace, cannot read the rest of your home folder (for example ~/.ssh), and cannot run unsandboxed',
     'Shell commands reach only the websites you allow (none by default); blocked websites apply to web access too',
     "Secret variables and GitHub tokens are not passed to Claude Code; its own API key is removed from the agent's shell",
   ],
@@ -71,6 +71,11 @@ export function invalidUrlPatterns(patterns) {
 /** Env var names are uppercase-ish identifiers; anything else is a typo. */
 export function invalidEnvNames(names) {
   return parseList(names).filter((n) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(n));
+}
+
+/** `https://*.example.com/path` → `*.example.com`: the host part sandbox rules match on. */
+export function urlHost(pattern) {
+  return String(pattern).replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
 }
 
 /** Core denies plus operator denies, deduplicated. */

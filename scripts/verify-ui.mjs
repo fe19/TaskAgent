@@ -196,8 +196,8 @@ async function permissions(page) {
              saved, bashChecked, summary, restored };
   });
   check(
-    'permissions section renders a checkbox for every tool the API offers',
-    p.toolCount === p.metaCount && p.toolCount > 0,
+    'permissions section renders a checkbox for every tool except the web tool (in Web access)',
+    p.toolCount === p.metaCount - 1 && p.toolCount > 0,
     `${p.toolCount} checkboxes for ${p.metaCount} tools`,
   );
   check(
@@ -220,6 +220,25 @@ async function permissions(page) {
     p.restored.allowed_tools.length === p.toolCount && p.restored.denied_commands.length === 0,
     `allowed=${p.restored.allowed_tools.join(',')}`,
   );
+}
+
+async function webAccess(page) {
+  const w = await inPage(page, () => {
+    const form = document.getElementById('web-form');
+    const order = [...form.querySelectorAll('input[name], #allowed-sites, button[type="submit"]')].map((el) => el.name || el.id);
+    return {
+      order,
+      allowAll: form.elements.allow_all_websites.checked,
+      webToolInGrid: Boolean(document.querySelector('#tool-grid input[value="web_fetch"]')),
+      saveText: document.getElementById('web-save').textContent.trim(),
+    };
+  });
+  check(
+    'web access is one section: allow all, web tool, allowed websites, blocked websites, then its Save',
+    w.order.join(',') === 'allow_all_websites,web_tool,allowed-sites,blocked_urls,web-save' && w.saveText === 'Save web access',
+    w.order.join(' → '),
+  );
+  check('all websites are not allowed by default, and the web tool is not in the tools grid', !w.allowAll && !w.webToolInGrid);
 }
 
 async function environment(page) {
@@ -717,7 +736,7 @@ let failed = 1;
 try {
   page = await openPage({ port: browser.port, url: APP });
   await sleep(3500);
-  for (const section of [topbar, settingsForm, assistantSwitch, permissions, environment, scheduledTask, queueing, liveRun, finishedRun, responsive]) {
+  for (const section of [topbar, settingsForm, assistantSwitch, permissions, webAccess, environment, scheduledTask, queueing, liveRun, finishedRun, responsive]) {
     await section(page);
   }
   failed = checks.filter((c) => !c.ok).length;

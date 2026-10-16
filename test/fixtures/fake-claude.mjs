@@ -7,6 +7,8 @@
  *   HANG          -> never exits (exercises the max-runtime kill path)
  *   FAIL          -> writes to stderr and exits 1
  *   ERROR_RESULT  -> a `result` with is_error true, but exit code 0
+ *   BLOCKED_SITE  -> a curl to www.bbc.co.uk that the sandbox refuses (real message format)
+ *   FETCH_SITE    -> a web fetch of https://example.com/page that works
  *   otherwise     -> a normal successful run that writes out.txt and env-names.json, exits 0
  * CLAUDE_CODE_FAKE_DELAY_MS delays the normal path (keeps runs visible in UI checks).
  */
@@ -53,6 +55,25 @@ if (prompt.includes('HANG')) {
   process.exit(0);
 } else {
   await new Promise((r) => setTimeout(r, Number(process.env.CLAUDE_CODE_FAKE_DELAY_MS) || 0));
+  if (prompt.includes('FETCH_SITE')) {
+    assistant([{ type: 'tool_use', id: 'f1', name: 'WebFetch', input: { url: 'https://example.com/page', prompt: 'title?' } }]);
+    emit({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'f1', content: 'Example Domain' }] } });
+  }
+  if (prompt.includes('BLOCKED_SITE')) {
+    assistant([{ type: 'tool_use', id: 'w1', name: 'Bash', input: { command: 'curl -sS https://www.bbc.co.uk/news' } }]);
+    emit({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: 'w1',
+          is_error: true,
+          content: 'Exit code 56\ncurl: (56) CONNECT tunnel failed, response 403\n\n<sandbox_violations>\ndeny network-outbound www.bbc.co.uk:443 (host is not on the allow list)\n</sandbox_violations>',
+        }],
+      },
+    });
+  }
   assistant([
     { type: 'thinking', thinking: 'I will create the requested file. Then I will stop.' },
     { type: 'tool_use', id: 't1', name: 'Write', input: { file_path: `${process.cwd()}/out.txt`, content: 'hello' } },

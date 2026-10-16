@@ -9,6 +9,7 @@ import { Bus } from '../../src/events.js';
 import { createStores, tempDir, removeDir, recordEvents } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_SRT = fileURLToPath(new URL('../fixtures/fake-srt.mjs', import.meta.url));
 const FAKE_CLAUDE = fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url));
 
 const SETTINGS = {
@@ -20,13 +21,13 @@ const SETTINGS = {
   secret_env_vars: [],
 };
 
-function harness({ prompt = 'write a file', settings = {}, ...overrides } = {}) {
+function harness({ prompt = 'write a file', settings = {}, taskSites, ...overrides } = {}) {
   const root = tempDir('acr-run-');
   const workspaceRoot = join(root, 'workspaces');
   const stores = createStores({ workspaceRoot });
   const bus = new Bus();
   const events = recordEvents(bus);
-  const task = stores.tasks.create({ prompt });
+  const task = stores.tasks.create({ prompt, allowed_sites: taskSites });
 
   const run = new AgentRun({
     runs: stores.runs,
@@ -36,6 +37,7 @@ function harness({ prompt = 'write a file', settings = {}, ...overrides } = {}) 
     settings: { ...SETTINGS, ...settings },
     workspaceRoot,
     copilotBin: FAKE_CLI,
+    srtBin: FAKE_SRT,
     usageRetries: 1,
     readUsage: () => null,
     ...overrides,
@@ -273,13 +275,13 @@ test('a missing binary fails the run instead of crashing the server', async () =
   h.cleanup();
 });
 
-test('a working directory seeded with skills is not shared with the agent', async () => {
+test('a run gets only its own workspace, never the shared working directory', async () => {
   const h = harness();
-  mkdirSync(join(h.run.workspaceRoot, '.github', 'skills'), { recursive: true });
   h.run.start();
   await h.run.exited;
-  const summaries = h.stores.runs.listEvents(h.run.runId).map((e) => e.summary);
-  assert.ok(summaries.some((s) => /access limited to the run workspace/.test(s)));
+  const args = JSON.parse(readFileSync(join(h.run.workspace, 'argv.json'), 'utf8'));
+  assert.ok(!args.includes('--add-dir'), 'other runs\' folders stay out of reach');
+  assert.equal(args[args.indexOf('-C') + 1], h.run.workspace);
   h.cleanup();
 });
 
@@ -385,5 +387,101 @@ test('a missing claude binary names CLAUDE_BIN in its error', async () => {
   h.run.start();
   await h.run.exited;
   assert.match(h.stores.runs.get(h.run.runId).error, /\/nonexistent\/claude is not installed .* set CLAUDE_BIN/);
+  h.cleanup();
+});
+
+test('a Copilot run is wrapped in the OS sandbox; the policy file is gone afterwards', async () => {
+  const h = harness();
+  h.run.start();
+  await h.run.exited;
+  const policy = JSON.parse(readFileSync(join(h.run.workspace, 'srt-policy.json'), 'utf8'));
+  assert.deepEqual(policy.filesystem.denyRead, ['~/']);
+  assert.equal(policy.filesystem.allowWrite[0], h.run.workspace);
+  assert.equal(h.run.policy && existsSync(h.run.policy.file), false, 'removed when the run ended');
+  assert.equal(h.stores.runs.get(h.run.runId).status, 'succeeded');
+  h.cleanup();
+});
+
+test('without srt a Copilot run fails closed, with how to install it', async () => {
+  const h = harness({ srtBin: '/nonexistent/srt' });
+  h.run.start();
+  const outcome = await h.run.exited;
+  assert.equal(outcome.status, 'failed');
+  assert.match(h.stores.runs.get(h.run.runId).error, /sandbox-runtime\) is not installed.*npm install -g @anthropic-ai\/sandbox-runtime/);
+  h.cleanup();
+});
+
+test('Claude Code runs are not wrapped: they use Claude Code\'s own sandbox', async () => {
+  const h = claude();
+  h.run.start();
+  await h.run.exited;
+  assert.equal(existsSync(join(h.run.workspace, 'srt-policy.json')), false);
+  h.cleanup();
+});
+
+test('a website the sandbox refused is kept on the run, once, with an activity line', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please' });
+  h.run.start();
+  await h.run.exited;
+  assert.equal(h.stores.runs.get(h.run.runId).blocked_sites, 'www.bbc.co.uk');
+  const summaries = h.stores.runs.listEvents(h.run.runId).map((e) => e.summary);
+  assert.ok(summaries.includes('Blocked website (not allowed): www.bbc.co.uk'));
+  assert.ok(h.events.find('run.blocked_sites'));
+  h.cleanup();
+});
+
+test('sites allowed for the task reach the sandbox and are not reported as blocked', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please', taskSites: ['www.bbc.co.uk'] });
+  h.run.start();
+  await h.run.exited;
+  assert.equal(h.stores.runs.get(h.run.runId).blocked_sites, '');
+  assert.deepEqual(h.run.settings.shell_allowed_domains, ['www.bbc.co.uk']);
+  assert.ok(h.run.settings.allowed_tools.includes('web_fetch'), 'the web tool comes with the site');
+  h.cleanup();
+});
+
+test('a site the user blocked on purpose is not offered for allowing', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please', settings: { blocked_urls: ['www.bbc.co.uk'] } });
+  h.run.start();
+  await h.run.exited;
+  assert.equal(h.stores.runs.get(h.run.runId).blocked_sites, '');
+  h.cleanup();
+});
+
+test('a run refused websites fails, even when the CLI exits cleanly, and says what to allow', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please' });
+  h.run.start();
+  const outcome = await h.run.exited;
+  assert.equal(outcome.status, 'failed');
+  const run = h.stores.runs.get(h.run.runId);
+  assert.equal(run.status, 'failed');
+  assert.equal(run.error, 'Needs websites that are not allowed: www.bbc.co.uk. Allow them and retry.');
+  assert.equal(h.stores.tasks.get(h.task.id).status, 'failed');
+  h.cleanup();
+});
+
+test('with the site allowed for the task, the same run succeeds', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please', taskSites: ['www.bbc.co.uk'] });
+  h.run.start();
+  assert.equal((await h.run.exited).status, 'succeeded');
+  h.cleanup();
+});
+
+test('sites the agent reached are kept on the run; refused ones only as blocked', async () => {
+  const h = claude({ prompt: 'FETCH_SITE and BLOCKED_SITE please', taskSites: ['example.com'] });
+  h.run.start();
+  await h.run.exited;
+  const run = h.stores.runs.get(h.run.runId);
+  assert.equal(run.accessed_sites, 'example.com');
+  assert.equal(run.blocked_sites, 'www.bbc.co.uk');
+  h.cleanup();
+});
+
+test('with all websites allowed, a failed web call is not reported as a blocked site', async () => {
+  const h = claude({ prompt: 'BLOCKED_SITE please', settings: { allow_all_websites: true } });
+  h.run.start();
+  const outcome = await h.run.exited;
+  assert.equal(h.stores.runs.get(h.run.runId).blocked_sites, '');
+  assert.equal(outcome.status, 'succeeded');
   h.cleanup();
 });

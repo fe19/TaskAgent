@@ -1,5 +1,7 @@
 import { badRequest, conflict, notFound } from './errors.js';
 import { LANES, taskLane } from './domain/run-status.js';
+import { mergeSites } from './domain/web-access.js';
+import { parseList } from './domain/permissions.js';
 
 /** Every state-changing operation, shared by every UI. */
 export function createActions({ settings, tasks, runs, scheduler, bus }) {
@@ -104,6 +106,30 @@ export function createActions({ settings, tasks, runs, scheduler, bus }) {
       if (!settings.read().auto_dispatch) throw conflict('All agent slots are busy. Stop an agent or raise Parallel agents.');
       tasks.release(id);
       bus.publish('task.released', { taskId: id });
+      scheduler.tick();
+      return tasks.get(id);
+    },
+
+    /**
+     * Lets a task reach websites: `permanent` adds them to the allowed websites for every task,
+     * otherwise only this task may reach them. `retry` then runs a finished task again now, in
+     * Manual and Auto mode; without a free slot it waits in the queue.
+     */
+    allowSites(id, { sites, permanent = false, retry = false } = {}) {
+      const task = requireTask(id);
+      const list = mergeSites(parseList(sites));
+      if (list.length === 0) throw badRequest('sites must name at least one website');
+      if (permanent) {
+        saveSettings({ shell_allowed_domains: mergeSites(settings.read().shell_allowed_domains, list) });
+      } else {
+        tasks.allowSites(id, list);
+        bus.publish('task.updated', { taskId: id });
+      }
+      if (retry && task.status !== 'queued' && task.status !== 'running') {
+        requeue(id);
+        if (!scheduler.startTask(id)) scheduler.tick();
+        return tasks.get(id);
+      }
       scheduler.tick();
       return tasks.get(id);
     },

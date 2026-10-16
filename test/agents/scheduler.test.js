@@ -7,6 +7,7 @@ import { Bus } from '../../src/events.js';
 import { createStores, tempDir, removeDir, recordEvents, waitFor } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_SRT = fileURLToPath(new URL('../fixtures/fake-srt.mjs', import.meta.url));
 
 function harness({ settings: patch = {} } = {}) {
   const root = tempDir('acr-sched-');
@@ -24,6 +25,7 @@ function harness({ settings: patch = {} } = {}) {
     agentOptions: {
       workspaceRoot,
       copilotBin: FAKE_CLI,
+      srtBin: FAKE_SRT,
       usageRetries: 1,
       readUsage: () => null,
     },
@@ -223,6 +225,7 @@ test('runs use the workspace root from settings when none is injected', async ()
     bus: new Bus(),
     agentOptions: {
       copilotBin: FAKE_CLI,
+      srtBin: FAKE_SRT,
       usageRetries: 1,
       readUsage: () => null,
     },

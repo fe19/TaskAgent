@@ -3,12 +3,16 @@ import { state } from '../store.js';
 import { esc } from '../format.js';
 import { put } from '../api-client.js';
 
+/** The web tool lives in the Web access section (web-access.js), not in this grid. */
+export const WEB_TOOL = 'web_fetch';
+
 export function render() {
   const { permissionMeta: meta, settings } = state;
   if (!meta || !settings) return;
 
   const allowed = new Set(settings.allowed_tools);
   $('tool-grid').innerHTML = meta.tools
+    .filter((tool) => tool.id !== WEB_TOOL)
     .map(
       (tool) => `
       <label class="tool" title="${esc(tool.hint)}">
@@ -21,13 +25,10 @@ export function render() {
     )
     .join('');
 
-  const form = $('permissions-form');
-  form.elements.denied_commands.value = settings.denied_commands.join(', ');
-  form.elements.blocked_urls.value = settings.blocked_urls.join(', ');
-  form.elements.shell_allowed_domains.value = settings.shell_allowed_domains.join(', ');
+  $('permissions-form').elements.denied_commands.value = settings.denied_commands.join(', ');
 
-  // Copilot's CLI has no OS sandbox: say so wherever its shell is on.
-  $('perm-warning').hidden = !(settings.assistant === 'copilot' && allowed.has('bash'));
+  // Copilot's sandbox needs srt and is not yet verified with the real CLI: say so.
+  $('perm-warning').hidden = settings.assistant !== 'copilot';
 
   $('perm-locked').innerHTML = [
     ...meta.core_denied_commands.map((c) => `<li><code>${esc(c)}</code> is always blocked</li>`),
@@ -46,11 +47,11 @@ export function mount() {
     'submit',
     withButton($('permissions-save'), async (event) => {
       event.preventDefault();
+      // The web tool is saved with Web access; keep its current setting here.
+      const web = state.settings.allowed_tools.includes(WEB_TOOL) ? [WEB_TOOL] : [];
       const { settings } = await put('/api/settings', {
-        allowed_tools: [...form.querySelectorAll('input[name="tool"]:checked')].map((i) => i.value),
+        allowed_tools: [...[...form.querySelectorAll('input[name="tool"]:checked')].map((i) => i.value), ...web],
         denied_commands: form.elements.denied_commands.value,
-        blocked_urls: form.elements.blocked_urls.value,
-        shell_allowed_domains: form.elements.shell_allowed_domains.value,
       });
       state.settings = settings;
       render();

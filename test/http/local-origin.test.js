@@ -8,6 +8,7 @@ import { allowedHostnames, localRequestRejection } from '../../src/http/local-or
 import { tempDir, removeDir } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_SRT = fileURLToPath(new URL('../fixtures/fake-srt.mjs', import.meta.url));
 const FAKE_GH = fileURLToPath(new URL('../fixtures/fake-gh.mjs', import.meta.url));
 
 const LOCAL = { bindHost: '127.0.0.1', port: 4317 };
@@ -84,6 +85,7 @@ async function boot() {
     dbFile: ':memory:',
     workspaceRoot: join(root, 'workspaces'),
     copilotBin: FAKE_CLI,
+    srtBin: FAKE_SRT,
     ghBin: FAKE_GH,
     usageRetries: 1,
     readUsage: () => null,

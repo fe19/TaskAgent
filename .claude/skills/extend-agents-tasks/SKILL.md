@@ -69,11 +69,13 @@ option parsing (Claude Code: last, after `--`).
 
 - **Local only.** `src/http/local-origin.js` rejects any request whose `Host` or `Origin` is
   not this server (CSRF and DNS rebinding). Every route goes through it; never add a bypass.
-- **Claude Code's shell sandbox.** `sandboxSettings` in `src/agents/claude-cli.js` must keep
-  `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, `strictAllowlist: true` and the
-  home-folder `denyRead`. Never add `excludedCommands` or broad `allowWrite`/`allowRead` paths.
+- **Every assistant is sandboxed.** Claude Code: `sandboxSettings` in `src/agents/claude-cli.js`
+  must keep `allowUnsandboxedCommands: false`, `failIfUnavailable: true`, `strictAllowlist: true`
+  and the home-folder `denyRead`. Other CLIs: give the adapter an `osSandbox` policy
+  (`src/agents/os-sandbox.js`); `AgentRun` then starts it inside `srt` and fails closed without it.
+  Never add `excludedCommands` or broad read/write paths, and never give a run another run's folder.
 - **Honest guarantees.** `ENFORCED_GUARANTEES` and `ASSISTANT_GUARANTEES` state only what is
-  enforced, including limits (Copilot's shell is not sandboxed; command blocks are text-matched).
+  enforced, including limits (Copilot's sandbox is unverified with the real CLI; command blocks are text-matched).
 - **Agent setup.** Each run gets a fresh workspace; `GIT_CEILING_DIRECTORIES` stops agent `git`
   from *finding* this repo (it does not stop `git -C`); `git push`, `gh` and `git remote` stay on
   the deny list (text-matched); MCP servers are off; `COPILOT_ALLOW_ALL` is `'1'`, never `'true'`

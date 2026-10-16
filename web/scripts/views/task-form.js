@@ -3,6 +3,7 @@ import { post, put } from '../api-client.js';
 import { state } from '../store.js';
 import { toLocalInput } from '../format.js';
 import { readSchedule, repeatOptions } from './schedule-fields.js';
+import { checkPromptSites } from './site-approval.js';
 
 // Set while the dialog edits a queued task instead of creating one.
 let editingId = null;
@@ -63,9 +64,13 @@ export function mount({ refresh }) {
     'submit',
     withButton($('task-submit'), async (event) => {
       event.preventDefault();
+      const existing = state.tasks.find((t) => t.id === editingId)?.allowed_sites ?? [];
+      const allowedSites = await checkPromptSites(form.elements.prompt.value, existing);
+      if (allowedSites === null) return; // cancelled: keep the form open
       const body = {
         prompt: form.elements.prompt.value,
         priority: Number(form.elements.priority.value),
+        allowed_sites: allowedSites,
         ...readSchedule(form),
       };
       const { task } = editingId == null ? await post('/api/tasks', body) : await put(`/api/tasks/${editingId}`, body);

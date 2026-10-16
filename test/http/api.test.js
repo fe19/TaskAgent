@@ -6,6 +6,7 @@ import { createApp } from '../../src/http/server.js';
 import { tempDir, removeDir, waitFor } from '../helpers.js';
 
 const FAKE_CLI = fileURLToPath(new URL('../fixtures/fake-copilot.mjs', import.meta.url));
+const FAKE_SRT = fileURLToPath(new URL('../fixtures/fake-srt.mjs', import.meta.url));
 const FAKE_CLAUDE = fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url));
 const FAKE_GH = fileURLToPath(new URL('../fixtures/fake-gh.mjs', import.meta.url));
 
@@ -16,6 +17,7 @@ async function boot() {
     dbFile: ':memory:',
     workspaceRoot: join(root, 'workspaces'),
     copilotBin: FAKE_CLI,
+    srtBin: FAKE_SRT,
     claudeBin: FAKE_CLAUDE,
     ghBin: FAKE_GH,
     // Never the real CLI: a page load asks for fresh Claude limits.
@@ -405,6 +407,39 @@ test('the schedule of a queued task can be changed and cleared, keeping its prom
 
   const cleared = await h.put(`/api/tasks/${body.task.id}`, { prompt: 'reschedule me', priority: 5, run_at: null, repeat: null });
   assert.deepEqual([cleared.body.task.run_at, cleared.body.task.repeat], [null, null]);
+  await h.cleanup();
+});
+
+test('allow and retry starts the task again right away, in Manual mode too', async () => {
+  const h = await boot();
+  const { body } = await h.post('/api/tasks', { prompt: 'Read https://www.bbc.co.uk/news' });
+  await h.post(`/api/tasks/${body.task.id}/cancel`);
+  const finished = async () => ['cancelled', 'succeeded', 'failed'].includes((await h.get('/api/tasks')).body.tasks[0].status);
+  for (const permanent of [false, true]) {
+    await waitFor(finished);
+    const res = await h.post(`/api/tasks/${body.task.id}/allow-sites`, { sites: ['www.bbc.co.uk'], permanent, retry: true });
+    assert.equal(res.body.task.status, 'running', `permanent=${permanent}: started, not just queued`);
+    await waitFor(async () => (await h.get('/api/tasks')).body.tasks[0].status !== 'running');
+  }
+  await h.cleanup();
+});
+
+test('websites can be allowed for one task, or for all tasks, and the task retried', async () => {
+  const h = await boot();
+  const { body } = await h.post('/api/tasks', { prompt: 'Read https://www.bbc.co.uk/news', allowed_sites: ['www.bbc.co.uk'] });
+  assert.deepEqual(body.task.allowed_sites, ['www.bbc.co.uk']);
+
+  const temporary = await h.post(`/api/tasks/${body.task.id}/allow-sites`, { sites: ['https://www.reuters.com/world'] });
+  assert.deepEqual(temporary.body.task.allowed_sites, ['www.bbc.co.uk', 'www.reuters.com']);
+  assert.deepEqual((await h.get('/api/settings')).body.settings.shell_allowed_domains, [], 'not added to the list');
+
+  await h.post(`/api/tasks/${body.task.id}/allow-sites`, { sites: ['pypi.org/simple'], permanent: true });
+  assert.deepEqual((await h.get('/api/settings')).body.settings.shell_allowed_domains, ['pypi.org']);
+
+  await h.post(`/api/tasks/${body.task.id}/cancel`);
+  const retried = await h.post(`/api/tasks/${body.task.id}/allow-sites`, { sites: ['a.org'], retry: true });
+  assert.equal(retried.body.task.status, 'running', 'a finished task runs again, now');
+  assert.equal((await h.post(`/api/tasks/${body.task.id}/allow-sites`, { sites: [] })).status, 400);
   await h.cleanup();
 });
 

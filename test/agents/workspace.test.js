@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import {
   createWorkspace,
   defaultWorkspaceRoot,
-  hasTrustedConfig,
   resolveWorkspaceRoot,
 } from '../../src/agents/workspace.js';
 import { tempDir, removeDir } from '../helpers.js';
@@ -84,21 +83,4 @@ test('two runs of the same task do not collide', () => {
 
 test('the default root sits under the current working directory', () => {
   assert.equal(defaultWorkspaceRoot(), join(process.cwd(), 'workspaces'));
-});
-
-test('a root with .github/skills or agents counts as holding trusted config', () => {
-  const root = tempDir('acr-trust-');
-  assert.equal(hasTrustedConfig(root), false);
-  mkdirSync(join(root, '.github', 'agents'), { recursive: true });
-  assert.equal(hasTrustedConfig(root), true);
-  removeDir(root);
-});
-
-test('every directory the CLI loads project skills from counts as trusted config', () => {
-  for (const dir of [['.github', 'skills'], ['.agents', 'skills'], ['.claude', 'skills']]) {
-    const root = tempDir('acr-trust-');
-    mkdirSync(join(root, ...dir), { recursive: true });
-    assert.equal(hasTrustedConfig(root), true, dir.join('/'));
-    removeDir(root);
-  }
 });

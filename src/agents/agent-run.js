@@ -3,7 +3,10 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { finalActivity, resolveFinalStatus, stoppingActivity } from '../domain/run-status.js';
 import { copilotAdapter } from './copilot-cli.js';
-import { createWorkspace, hasTrustedConfig } from './workspace.js';
+import { createWorkspace } from './workspace.js';
+import { resolveBinary, wrapCommand, writePolicy } from './os-sandbox.js';
+import { allowsAllWebsites, isSiteAllowed, withTaskSites } from '../domain/web-access.js';
+import { DEFAULT_TOOL_IDS } from '../domain/permissions.js';
 import { terminate } from './process.js';
 import { pollUsage } from './usage-sync.js';
 
@@ -29,11 +32,13 @@ export class AgentRun {
       tasks,
       bus,
       task,
-      settings,
+      // Sites allowed for this task only are added to the allowed websites, for this run.
+      settings: withTaskSites(settings, task.allowed_sites, DEFAULT_TOOL_IDS),
       workspaceRoot,
       adapter,
     });
     this.bin = bins[adapter.binOption] || adapter.defaultBin;
+    this.srtBin = bins.srtBin || 'srt';
     this.usageOptions = { retries: usageRetries, read: readUsage };
 
     this.sessionId = randomUUID();
@@ -44,6 +49,9 @@ export class AgentRun {
     this.finalMessage = null;
     this.reportedUsage = null;
     this.reportedError = null;
+    this.toolSites = new Map(); // tool call id → sites it targets
+    this.blockedSites = new Set();
+    this.accessedSites = new Set();
   }
 
   start() {
@@ -80,15 +88,21 @@ export class AgentRun {
 
     const args = this.adapter.buildArgs({
       prompt: this.task.prompt,
+      // Only the run's own workspace: runs can't read each other's files.
       workspace: this.workspace,
-      workspaceRoot: this.#sharedRoot(),
       model: this.adapter.model(this.settings),
       sessionId: this.sessionId,
       reasoningEffort,
       permissions: this.settings,
     });
 
-    this.child = spawn(this.bin, args, {
+    // Wrapped in srt, a missing CLI would only surface as srt's error; catch it first.
+    if (this.adapter.osSandbox && !resolveBinary(this.bin)) {
+      queueMicrotask(() => this.#finalize({ status: 'failed', error: this.#notInstalled(this.bin) }));
+      return;
+    }
+    const command = this.#sandboxed(args);
+    this.child = spawn(command.bin, command.args, {
       cwd: this.workspace,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: this.adapter.buildEnv({
@@ -109,18 +123,29 @@ export class AgentRun {
     this.child.on('close', (code) => this.#onClose(code));
   }
 
+  /**
+   * An assistant without its own sandbox runs entirely inside sandbox-runtime. The policy file
+   * lives outside the workspace and is removed when the run ends.
+   */
+  #sandboxed(args) {
+    if (!this.adapter.osSandbox) return { bin: this.bin, args };
+    this.policy?.remove();
+    this.policy = writePolicy(this.adapter.osSandbox(this.settings, { workspace: this.workspace, bin: this.bin }));
+    return wrapCommand({ srtBin: this.srtBin, bin: this.bin, args, policyFile: this.policy.file });
+  }
+
   /** A missing CLI is the most common setup mistake; say which one and how to fix it. */
   #spawnError(err) {
     if (err.code !== 'ENOENT') return err.message;
-    const variable = this.adapter.binOption.replace(/Bin$/, '').toUpperCase();
-    return `${this.bin} is not installed or not on PATH. Install it, set ${variable}_BIN, or switch the AI assistant.`;
+    if (this.adapter.osSandbox) {
+      return `${this.srtBin} (Anthropic sandbox-runtime) is not installed, so this assistant can't run sandboxed. Install it with: npm install -g @anthropic-ai/sandbox-runtime (set SRT_BIN if it lives elsewhere).`;
+    }
+    return this.#notInstalled(this.bin);
   }
 
-  /** The root agents may access freely, unless it holds config `--add-dir` would trust. */
-  #sharedRoot() {
-    if (!hasTrustedConfig(this.workspaceRoot)) return this.workspaceRoot;
-    this.#record('warning', 'Working directory has agent skills or custom agents; access limited to the run workspace');
-    return null;
+  #notInstalled(bin) {
+    const variable = this.adapter.binOption.replace(/Bin$/, '').toUpperCase();
+    return `${bin} is not installed or not on PATH. Install it, set ${variable}_BIN, or switch the AI assistant.`;
   }
 
   #onLine(line) {
@@ -138,12 +163,49 @@ export class AgentRun {
     if (facts.error) this.reportedError = facts.error;
     // Account-wide, not per run: the control room keeps the latest reading.
     if (facts.limits) this.#publish('assistant.limits', { assistant: this.adapter.id, limits: facts.limits });
+    for (const call of facts.toolStarts ?? []) if (call.sites.length) this.toolSites.set(call.id, call.sites);
+    const blocked = [...(facts.blockedSites ?? [])];
+    for (const end of facts.toolEnds ?? []) {
+      const sites = this.toolSites.get(end.id) ?? [];
+      // A failed call's sites may have been refused (Copilot's errors don't say); a call that
+      // worked reached them.
+      if (end.failed) blocked.push(...sites);
+      else this.#accessed(sites);
+    }
+    if (blocked.length > 0) this.#blocked(blocked);
     if (facts.result) {
       this.runs.recordCliResult(this.runId, facts.result);
       // The CLI exits 0 on SIGTERM; "Finished with exit code 0" would mislead.
       if (this.stopping) return;
     }
     for (const a of facts.activities ?? []) this.#record(a.kind, a.summary, evt.timestamp);
+  }
+
+  /** Sites the agent reached, kept on the run for the detail view. */
+  #accessed(sites) {
+    const fresh = [...new Set(sites)].filter((s) => !this.accessedSites.has(s) && !this.blockedSites.has(s));
+    if (fresh.length === 0) return;
+    for (const s of fresh) this.accessedSites.add(s);
+    this.runs.addAccessedSites(this.runId, fresh);
+  }
+
+  /** Sites the agent wanted but may not reach: kept on the run so the user can allow them. */
+  #blocked(sites) {
+    // With all websites allowed, only blocked ones are refused, and those are never offered.
+    if (allowsAllWebsites({ ...this.settings, assistant: this.adapter.id })) return;
+    // A site the user blocked on purpose is not offered for allowing.
+    // One call can report a site twice (the sandbox message and the failed call itself).
+    const fresh = [...new Set(sites)].filter(
+      (s) =>
+        !isSiteAllowed(s, this.settings.shell_allowed_domains ?? []) &&
+        !isSiteAllowed(s, this.settings.blocked_urls ?? []) &&
+        !this.blockedSites.has(s),
+    );
+    if (fresh.length === 0) return;
+    for (const s of fresh) this.blockedSites.add(s);
+    this.runs.addBlockedSites(this.runId, fresh);
+    this.#record('warning', `Blocked website${fresh.length === 1 ? '' : 's'} (not allowed): ${fresh.join(', ')}`);
+    this.#publish('run.blocked_sites', { sites: [...this.blockedSites] });
   }
 
   #record(kind, summary, ts) {
@@ -166,7 +228,9 @@ export class AgentRun {
 
     // A CLI may report an error in its result and still exit 0.
     const exitCode = code === 0 && this.reportedError && !this.stopping ? 1 : code;
-    const status = resolveFinalStatus({ exitCode, stopReason: this.stopping });
+    let status = resolveFinalStatus({ exitCode, stopReason: this.stopping });
+    // A run refused websites could not do its job, however it ended: it failed.
+    if (status === 'succeeded' && this.blockedSites.size > 0) status = 'failed';
     await this.#finalize({ status, error: this.#errorFor(status, code), exitCode: code });
   }
 
@@ -184,6 +248,10 @@ export class AgentRun {
   #errorFor(status, code) {
     if (status === 'failed') {
       if (this.reportedError) return this.reportedError;
+      if (this.blockedSites.size > 0) {
+        const sites = [...this.blockedSites].join(', ');
+        return `Needs websites that are not allowed: ${sites}. Allow them and retry.`;
+      }
       return this.stderr.trim().split('\n').slice(-3).join('\n') || `Exited with code ${code}`;
     }
     if (status === 'timed_out') {
@@ -196,6 +264,7 @@ export class AgentRun {
     if (this.finished) return;
     this.finished = true;
     clearTimeout(this.timer);
+    this.policy?.remove();
     this.cancelKill?.();
 
     // Kept in the database only; downloaded on demand.

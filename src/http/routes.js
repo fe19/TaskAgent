@@ -73,6 +73,9 @@ export function registerRoutes(router, { actions, settings, tasks, runs, limits,
     .post('/api/tasks/:id/start', ({ params }) => ({
       task: presentTask(actions.startTask(params.id)),
     }))
+    .post('/api/tasks/:id/allow-sites', ({ params, body }) => ({
+      task: presentTask(actions.allowSites(params.id, body)),
+    }))
     .post('/api/tasks/:id/move', async ({ params, body }) => ({
       task: presentTask(await actions.moveTask(params.id, body)),
     }))

@@ -8,7 +8,7 @@ Zero npm dependencies, no build step.
 ## Requirements
 
 - Node.js ≥ 22.5 (`node:sqlite`)
-- For GitHub Copilot: `copilot` on `PATH`, signed in; `gh` signed in (optional, for the remaining allowance)
+- For GitHub Copilot: `copilot` on `PATH`, signed in; Anthropic's sandbox-runtime (`npm install -g @anthropic-ai/sandbox-runtime`, plus `ripgrep` on macOS, `bubblewrap`, `socat` and `ripgrep` on Linux), which Copilot runs inside; `gh` signed in (optional, for the remaining allowance)
 - For Claude Code: `claude` on `PATH`, signed in (`claude auth`) or `ANTHROPIC_API_KEY` set. Its shell sandbox works on macOS out of the box; on Linux and WSL2 it needs `bubblewrap` and `socat`. Without them, Claude Code runs fail instead of running unsandboxed.
 
 ## Run
@@ -47,6 +47,21 @@ The UI adapts to phones and tablets: on narrow screens the configuration starts 
 
 A terminal UI is planned once the web UI is settled. The core is UI-agnostic; see [the extension skill](.claude/skills/extend-agents-tasks/SKILL.md).
 
+### Web access
+
+Agents reach only allowed websites, with their web tool and with shell commands such as `curl`. Access is per site: allowing `www.bbc.co.uk` allows every page under it, such as `www.bbc.co.uk/news`; `*.example.com` covers its subdomains.
+
+- **Before a task is saved**, the app looks for web addresses in the prompt (`https://…`, `www.…`, or a name with a path like `bbc.co.uk/news`). For any that are not allowed it asks: **Allow for this task** (every run of this task, nothing else), **Add to allowed websites** (all tasks), **Continue without**, or **Cancel**.
+- **After a run** that was refused websites, the run counts as **failed** (red), even if the agent finished cleanly: it could not do its job. The tile says "Blocked: …", and the run detail offers **Allow for this task and retry** and **Add to allowed websites and retry**; both start the task again right away (if an agent slot is free), in Manual mode too. Sites you blocked on purpose don't count.
+- A task with its own allowed sites also gets the web tool, so it can use them.
+- Claude Code's web tool fetches pages through Anthropic's servers, and some sites refuse that (for example www.bbc.co.uk answers "unable to fetch"). That is the site's choice, not a setting here; shell commands such as `curl` still reach an allowed site directly.
+- Clicking a run shows its **Websites** below the result: the sites it reached, and in red the ones it was refused. They are taken from the agent's tool calls (a web-tool URL, or `https://…`, `www.…` or `site/path` in a shell command), so pages reached through search results are not listed.
+- The **Web access** card (above Permissions) groups it all, saved with **Save web access**:
+  - **Allow all websites** (off by default): every site except blocked ones. Claude Code only; GitHub Copilot's sandbox (`srt`) refuses "all", so Copilot keeps using the allowed list.
+  - **Agents may use their web tool.**
+  - **Allowed websites**: add a site, or remove one with ×.
+  - **Blocked websites**: always blocked, even when all websites are allowed, and never offered for allowing after a run.
+
 ### Monitoring
 
 The **Monitoring** tab (next to Board; `#monitoring` in the URL) shows, for the last hour (per 5 minutes), 24 hours (per hour), 7 or 30 days (per day):
@@ -80,6 +95,7 @@ How to run the app against the fake CLI and verify a change: [the verify skill](
 | `DB_FILE` | `./data/control-room.db` |
 | `COPILOT_BIN` | `copilot` |
 | `CLAUDE_BIN` | `claude` |
+| `SRT_BIN` | `srt` (sandbox-runtime, wraps Copilot) |
 | `COPILOT_HOME` | `~/.copilot` (token usage source) |
 | `GH_BIN` | `gh` (remaining allowance source) |
 
@@ -110,9 +126,10 @@ Cloud keys, `SSH_AUTH_SOCK` and everything else stay out. `COPILOT_GITHUB_TOKEN`
 - Agent CPU/RAM in the top bar is measured live (`ps`) over each agent's whole process tree; CPU is a share of all cores. Shown as n/a where `ps` is unavailable.
 - Token usage comes from the Copilot session store, or for Claude Code from its final `result` event. It is never estimated: a run with no data shows "not reported yet" (still running) or "unavailable" (finished).
 - Agents get a minimal environment; see [Environment variables](#environment-variables).
-- Each run gets a throwaway workspace and may access the whole agent working directory (`--add-dir`). MCP servers are disabled, and web access (`web_fetch`) is off by default.
-- **Claude Code's shell commands run in an OS sandbox** (macOS Seatbelt, Linux bubblewrap). They can write only in the run workspace and working directory, cannot read the rest of your home folder (so not `~/.ssh`, `~/.aws` or Claude's own login), and reach only the websites listed under **Websites shell commands may reach** (none by default). A command cannot ask to leave the sandbox, and a run fails rather than run unsandboxed. Claude's file tools are confined to the same directories.
-- **GitHub Copilot's shell is not sandboxed.** With "Run shell commands" on, a Copilot agent can read and change anything your user account can and reach any site that is not blocked. The Permissions card warns about this; use Claude Code or turn the shell off for untrusted work.
+- Each run gets a throwaway workspace and can use only that folder: runs can't read each other's files. MCP servers are disabled, and web access (`web_fetch`) is off by default.
+- **Both assistants run in an OS sandbox** (macOS Seatbelt, Linux bubblewrap), with the same rules: write only in the run workspace, no reading the rest of your home folder (so not `~/.ssh`, `~/.aws` or other repositories), and network only to the **Allowed websites** (none by default; see [Web access](#web-access)). Nothing can ask to leave the sandbox, and a run fails rather than run unsandboxed.
+  - **Claude Code** uses its built-in sandbox around shell commands; its file tools are confined to the workspace by permission rules. Verified with the real CLI.
+  - **GitHub Copilot** has no sandbox of its own, so the whole CLI runs inside Anthropic's sandbox-runtime (`srt`). It may also read and write its own `~/.copilot` folder and reach Copilot's servers (including `github.com`), and so can its shell commands. **Not yet verified with the real Copilot CLI**: `srt` and the policy are tested, Copilot's sign-in and connection inside the sandbox are not. The Permissions card says so.
 - Blocked commands (`git push`, `gh`, `git remote` and your own) are matched by their text. They are a guard rail, not a boundary: `sh -c "git push"` is not caught by the rule (for Claude Code, the sandbox still stops it: no access to your git config and no route to GitHub unless you allow it).
 
 | | GitHub Copilot | Claude Code |
@@ -120,9 +137,9 @@ Cloud keys, `SSH_AUTH_SOCK` and everything else stay out. `COPILOT_GITHUB_TOKEN`
 | Tools | `--available-tools` | `--tools`; file tools allowed only in the workspace and working directory |
 | Prompts | `--allow-all-tools` within the permission flags | `--permission-mode dontAsk`: anything not allowed is denied |
 | Denied commands | `--deny-tool shell(…)` | `--disallowedTools Bash(…)` |
-| Shell sandbox | none: the shell has your full user access | OS sandbox via `--settings`: writes and reads limited as above, no unsandboxed retry, fails closed |
-| Shell network | any site except blocked ones (`--deny-url`) | only allowed websites (`network.allowedDomains`, `strictAllowlist`); blocked ones denied too |
-| Blocked websites | `--deny-url`: web access and shell commands | `WebFetch(domain:…)` and the sandbox's `deniedDomains` |
+| Sandbox | the whole CLI in `srt --settings <policy>` (src/agents/os-sandbox.js); fails closed without `srt` | built-in shell sandbox via `--settings`; no unsandboxed retry; fails closed |
+| Network | Copilot's servers plus allowed websites; blocked ones denied | only allowed websites (`network.allowedDomains`, `strictAllowlist`); blocked ones denied |
+| Blocked websites | `--deny-url` and the sandbox's `deniedDomains` | `WebFetch(domain:…)` and the sandbox's `deniedDomains` |
 | Secrets | passed, hidden from the shell and redacted (`--secret-env-vars`) | not passed at all; its own API key is removed from the shell (`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`) |
 | Untrusted workspace | never trusted (`COPILOT_ALLOW_ALL=1`) | `--safe-mode`, `--setting-sources user`: no CLAUDE.md, skills, hooks or plugins from it |
 | MCP | `--disable-builtin-mcps` | `--strict-mcp-config` without servers |

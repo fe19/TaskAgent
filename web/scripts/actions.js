@@ -3,7 +3,17 @@ import { post, del } from './api-client.js';
 import * as runDialog from './views/run-dialog.js';
 import * as taskForm from './views/task-form.js';
 
+// Set on mount: re-reads settings so every card shows a change at once.
+let reloadSettings = async () => {};
+
 const ACTIONS = {
+  // A blocked run: allow its sites (for this task, or for all) and run the task again.
+  'allow-sites': async (id, { sites, permanent }) => {
+    await post(`/api/tasks/${id}/allow-sites`, { sites, permanent: permanent === 'true', retry: true });
+    runDialog.close();
+    // Added to the allowed websites: the Web access card shows them now, not after a reload.
+    if (permanent === 'true') await reloadSettings();
+  },
   'cancel-task': (id) => post(`/api/tasks/${id}/cancel`),
   'delete-task': (id) => del(`/api/tasks/${id}`),
   'start-task': (id) => post(`/api/tasks/${id}/start`),
@@ -15,7 +25,8 @@ const ACTIONS = {
   },
 };
 
-export function mount({ refresh }) {
+export function mount({ refresh, reloadSettings: reload }) {
+  reloadSettings = reload;
   document.addEventListener('click', (event) => onClick(event, refresh));
   document.addEventListener('keydown', onKeydown);
   $('error-dismiss').addEventListener('click', clearError);
@@ -40,7 +51,7 @@ async function onClick(event, refresh) {
 
   button.disabled = true;
   const ok = await reportError(async () => {
-    await ACTIONS[action]?.(id);
+    await ACTIONS[action]?.(id, button.dataset);
     await refresh();
   });
   if (!ok) button.disabled = false;

@@ -12,6 +12,8 @@ export function loadConfig(overrides = {}) {
     workspaceRoot: undefined,
     copilotBin: process.env.COPILOT_BIN || 'copilot',
     claudeBin: process.env.CLAUDE_BIN || 'claude',
+    // Anthropic's sandbox-runtime, which wraps assistants without a sandbox of their own.
+    srtBin: process.env.SRT_BIN || 'srt',
     ghBin: process.env.GH_BIN || 'gh',
     ...overrides,
   };

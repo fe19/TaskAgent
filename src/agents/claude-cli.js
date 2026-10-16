@@ -4,8 +4,10 @@ import {
   TOOL_IDS,
   effectiveDeniedCommands,
   parseList,
+  urlHost,
 } from '../domain/permissions.js';
 import { agentEnvironment } from '../domain/environment.js';
+import { toolCallSites } from '../domain/web-access.js';
 
 /** Claude Code CLI adapter: argv, env and stream-json events. Same interface as `copilotAdapter`. */
 
@@ -24,20 +26,24 @@ const TOOL_MAP = {
 const under = (dir) => `/${dir.replace(/\/+$/, '')}/**`;
 
 /** Permission settings → tool flags. `dontAsk` denies anything not allowed here. */
-export function toolArgs({ allowed_tools, denied_commands, blocked_urls } = {}, { workspace, workspaceRoot } = {}) {
+export function toolArgs({ allowed_tools, denied_commands, blocked_urls, shell_allowed_domains, allow_all_websites } = {}, { workspace } = {}) {
   const selected = parseList(allowed_tools).filter((t) => TOOL_IDS.includes(t));
   const tools = (selected.length > 0 ? selected : DEFAULT_TOOL_IDS).flatMap((t) => TOOL_MAP[t]);
 
-  // File tools are confined to the run workspace and the shared root.
-  const dirs = [workspace, workspaceRoot].filter(Boolean);
+  // File tools are confined to the run's own workspace.
+  const dirs = [workspace].filter(Boolean);
+  const sites = parseList(shell_allowed_domains).map(urlHost);
   const allowed = tools.flatMap((tool) => {
     if (tool === 'Read') return dirs.map((d) => `Read(${under(d)})`);
     if (['Write', 'Edit', 'NotebookEdit'].includes(tool)) return dirs.map((d) => `Edit(${under(d)})`);
+    // The web tool, like shell commands, reaches only the allowed websites (blocked ones never).
+    // A bare "WebFetch" rule does not let dontAsk mode fetch a new domain; "domain:*" does.
+    if (tool === 'WebFetch') return allow_all_websites ? ['WebFetch(domain:*)'] : sites.map((site) => `WebFetch(domain:${site})`);
     return [tool];
   });
 
   const denied = effectiveDeniedCommands(denied_commands).flatMap((c) => [`Bash(${c})`, `Bash(${c} *)`]);
-  for (const url of parseList(blocked_urls)) denied.push(`WebFetch(domain:${hostOf(url)})`);
+  for (const url of parseList(blocked_urls)) denied.push(`WebFetch(domain:${urlHost(url)})`);
 
   return [
     '--tools', [...new Set(tools)].join(','),
@@ -52,7 +58,7 @@ export function toolArgs({ allowed_tools, denied_commands, blocked_urls } = {}, 
  * (~/.ssh, ~/.aws, Claude's own login), and reach only the allowed websites. There is no
  * unsandboxed retry, and a run fails rather than run unsandboxed when the sandbox can't start.
  */
-export function sandboxSettings({ shell_allowed_domains, blocked_urls } = {}, { workspace, workspaceRoot } = {}) {
+export function sandboxSettings({ shell_allowed_domains, blocked_urls, allow_all_websites } = {}, { workspace } = {}) {
   return {
     sandbox: {
       enabled: true,
@@ -61,23 +67,20 @@ export function sandboxSettings({ shell_allowed_domains, blocked_urls } = {}, { 
       failIfUnavailable: true,
       filesystem: {
         denyRead: ['~/'],
-        allowRead: [workspace, workspaceRoot].filter(Boolean),
+        allowRead: [workspace].filter(Boolean),
       },
       network: {
-        allowedDomains: parseList(shell_allowed_domains).map(hostOf),
-        deniedDomains: parseList(blocked_urls).map(hostOf),
+        // "*": every site; deniedDomains still refuse the blocked ones.
+        allowedDomains: allow_all_websites ? ['*'] : parseList(shell_allowed_domains).map(urlHost),
+        deniedDomains: parseList(blocked_urls).map(urlHost),
         strictAllowlist: true,
       },
     },
   };
 }
 
-/** `https://*.example.com/path` → `*.example.com`. */
-function hostOf(pattern) {
-  return pattern.replace(/^https?:\/\//, '').replace(/[:/].*$/, '');
-}
 
-export function buildArgs({ prompt, workspace, workspaceRoot, model, sessionId, reasoningEffort, permissions = {} }) {
+export function buildArgs({ prompt, workspace, model, sessionId, reasoningEffort, permissions = {} }) {
   const args = [
     '-p',
     '--output-format', 'stream-json',
@@ -91,10 +94,9 @@ export function buildArgs({ prompt, workspace, workspaceRoot, model, sessionId, 
     // No --mcp-config, so no MCP servers at all.
     '--strict-mcp-config',
     // CLI settings win over any settings file, so the workspace can't loosen the sandbox.
-    '--settings', JSON.stringify(sandboxSettings(permissions, { workspace, workspaceRoot })),
-    ...toolArgs(permissions, { workspace, workspaceRoot }),
+    '--settings', JSON.stringify(sandboxSettings(permissions, { workspace })),
+    ...toolArgs(permissions, { workspace }),
   ];
-  if (workspaceRoot) args.push('--add-dir', workspaceRoot);
   if (reasoningEffort && reasoningEffort !== 'default') args.push('--effort', reasoningEffort);
   // Last, after `--`: a prompt starting with "-" must not be read as an option.
   args.push('--', prompt);
@@ -137,8 +139,13 @@ export function interpret(evt) {
     case 'assistant':
       return interpretAssistant(evt.message?.content ?? []);
     case 'user': {
-      const failed = (evt.message?.content ?? []).some((b) => b?.type === 'tool_result' && b.is_error);
-      return failed ? { activities: [{ kind: 'tool_done', summary: 'Tool call failed' }] } : {};
+      const results = (evt.message?.content ?? []).filter((b) => b?.type === 'tool_result');
+      const out = {};
+      if (results.some((b) => b.is_error)) out.activities = [{ kind: 'tool_done', summary: 'Tool call failed' }];
+      const blocked = results.flatMap((b) => blockedSitesIn(resultText(b.content)));
+      if (blocked.length > 0) out.blockedSites = [...new Set(blocked)];
+      if (results.length > 0) out.toolEnds = results.map((b) => ({ id: b.tool_use_id, failed: Boolean(b.is_error) }));
+      return out;
     }
     case 'result':
       return interpretResult(evt);
@@ -149,6 +156,20 @@ export function interpret(evt) {
     default:
       return {};
   }
+}
+
+function resultText(content) {
+  if (typeof content === 'string') return content;
+  return Array.isArray(content) ? content.map((c) => (typeof c?.text === 'string' ? c.text : '')).join('\n') : '';
+}
+
+/**
+ * Sites the sandbox refused: "deny network-outbound www.bbc.co.uk:443". (The web tool's
+ * "unable to fetch from …" is different: the site refused Claude's fetcher, which no setting
+ * here changes. A web tool permission denial names no site; the failed call's URL stands in.)
+ */
+export function blockedSitesIn(text) {
+  return [...text.matchAll(/deny network-outbound ([a-z0-9.*-]+\.[a-z0-9-]+)(?::\d+)?/gi)].map((m) => m[1].toLowerCase());
 }
 
 /**
@@ -181,6 +202,7 @@ function interpretAssistant(content) {
       out.activities.push({ kind: 'message', summary: firstSentence(block.text) });
     } else if (block?.type === 'tool_use') {
       out.toolCalls += 1;
+      (out.toolStarts ??= []).push({ id: block.id, sites: toolCallSites(block.input) });
       out.activities.push({ kind: 'tool', summary: describeTool(block) });
     }
   }

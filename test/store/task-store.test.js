@@ -257,3 +257,13 @@ test('editing a due task keeps its passed start time; a new past time is rejecte
   assert.equal(tasks.editQueued(task.id, { prompt: 'unscheduled' }).run_at, null, 'clearing the time queues it normally');
   db.close();
 });
+
+test('a task can carry its own allowed sites; an edit without them keeps them', () => {
+  const { db, tasks } = scheduledStore();
+  const task = tasks.create({ prompt: 'read the news', allowed_sites: ['https://www.bbc.co.uk/news', 'WWW.BBC.CO.UK'] });
+  assert.equal(task.allowed_sites, 'www.bbc.co.uk');
+  assert.equal(tasks.editQueued(task.id, { prompt: 'read more news' }).allowed_sites, 'www.bbc.co.uk');
+  assert.equal(tasks.allowSites(task.id, ['reuters.com']).allowed_sites, 'www.bbc.co.uk,reuters.com');
+  assert.throws(() => tasks.create({ prompt: 'x', allowed_sites: ['not a site!'] }), /invalid websites/);
+  db.close();
+});

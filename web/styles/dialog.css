@@ -237,3 +237,71 @@
     grid-template-columns: 104px 1fr;
   }
 }
+
+/* A run that was refused websites. */
+.blocked-sites {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+}
+
+.blocked-sites p {
+  margin: 0 0 6px;
+}
+
+.blocked-sites .detail-actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.sites-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#sites-dialog .dialog-body > p:first-child {
+  margin-top: 0;
+}
+
+/* The websites a run reached; refused ones in red. */
+.run-sites {
+  margin-top: 8px;
+}
+
+.run-sites .site-chip {
+  padding-right: 10px;
+}
+
+.site-chip[data-kind='blocked'] {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* × in a dialog's corner: closes it. */
+.dialog-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dialog-close:hover,
+.dialog-close:focus-visible {
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border-color: var(--border-strong);
+}

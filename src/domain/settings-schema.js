@@ -1,4 +1,5 @@
 import { TOOL_IDS, parseList, serializeList, invalidEnvNames, invalidUrlPatterns } from './permissions.js';
+import { mergeSites, siteOf } from './web-access.js';
 import { ASSISTANTS, DEFAULT_ASSISTANT } from './assistants.js';
 
 /** Settings schema and validation. Pure: path checks are injected as `resolvePath`. */
@@ -54,8 +55,10 @@ export const SETTING_SPEC = {
   allowed_tools: { type: 'tools' },
   denied_commands: { type: 'list' },
   blocked_urls: { type: 'urls' },
-  // Websites Claude Code's sandboxed shell commands may reach; none by default.
-  shell_allowed_domains: { type: 'urls' },
+  // Allowed websites: what agents' web tools and sandboxed shell commands may reach; none by default.
+  shell_allowed_domains: { type: 'sites' },
+  // Every website except blocked ones. Claude Code only: Copilot's sandbox (srt) refuses "*".
+  allow_all_websites: { type: 'bool' },
   secret_env_vars: { type: 'env-names' },
   // Extra server environment variables agents receive; see ./environment.js.
   passed_env_vars: { type: 'env-names' },
@@ -82,6 +85,7 @@ export function decodeSettings(raw, { defaultWorkspaceRoot }) {
     claude_model: raw.claude_model,
     claude_effort: raw.claude_effort,
     auto_dispatch: raw.auto_dispatch === 'true',
+    allow_all_websites: raw.allow_all_websites === 'true',
     workspace_root: raw.workspace_root || defaultWorkspaceRoot,
     usd_per_aic: Number(raw.usd_per_aic ?? DEFAULT_USD_PER_AIC),
   };
@@ -145,6 +149,13 @@ const VALIDATORS = {
     const invalid = invalidUrlPatterns(value);
     if (invalid.length > 0) return { error: `${key} contains invalid websites: ${invalid.join(', ')}` };
     return { value: serializeList(value) };
+  },
+
+  /** Websites, stored as sites (hosts): "https://www.bbc.co.uk/news" becomes "www.bbc.co.uk". */
+  sites(key, value) {
+    const invalid = parseList(value).filter((entry) => !siteOf(entry));
+    if (invalid.length > 0) return { error: `${key} contains invalid websites: ${invalid.join(', ')}` };
+    return { value: mergeSites(parseList(value)).join(',') };
   },
 
   'env-names': function envNames(key, value) {

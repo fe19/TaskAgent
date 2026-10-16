@@ -110,9 +110,10 @@ test('guarantees promise only what each assistant enforces', () => {
   const claude = enforcedGuarantees('claude-code').join('\n');
   const copilot = enforcedGuarantees('copilot').join('\n');
   assert.match(claude, /OS sandbox/);
-  assert.match(copilot, /NOT sandboxed/);
-  assert.doesNotMatch(copilot, /OS sandbox/);
+  assert.match(copilot, /OS sandbox \(Anthropic sandbox-runtime\)/);
+  assert.match(copilot, /Not yet verified with the real Copilot CLI/);
+  assert.match(copilot, /fail instead of running unsandboxed/);
   // Text-matched command blocks are a guard rail; both lists say so.
   for (const list of [claude, copilot]) assert.match(list, /guard rail, not a boundary/);
-  assert.doesNotMatch(`${claude}\n${copilot}`, /need approval and are denied|cannot see/);
+  assert.doesNotMatch(`${claude}\n${copilot}`, /need approval and are denied|cannot see|whole working directory/);
 });

@@ -4,6 +4,14 @@ import { finalActivity } from '../domain/run-status.js';
 const RECENT_LIMIT = 50;
 const EVENT_LIMIT = 100;
 
+/** Adds `sites` to a comma-separated column of a run, without duplicates. */
+function mergeInto(get, set, column, runId, sites) {
+  const current = (get.get(runId)?.[column] ?? '').split(',').filter(Boolean);
+  const merged = [...new Set([...current, ...sites])];
+  set.run(merged.join(','), runId);
+  return merged;
+}
+
 /** Run rows, activity events and mirrored token usage. */
 export function createRunStore({ db }) {
   const statements = {
@@ -21,6 +29,10 @@ export function createRunStore({ db }) {
         WHERE id = ?`,
     ),
     saveResult: db.prepare('UPDATE runs SET result_text = ? WHERE id = ?'),
+    setBlockedSites: db.prepare('UPDATE runs SET blocked_sites = ? WHERE id = ?'),
+    getBlockedSites: db.prepare('SELECT blocked_sites FROM runs WHERE id = ?'),
+    setAccessedSites: db.prepare('UPDATE runs SET accessed_sites = ? WHERE id = ?'),
+    getAccessedSites: db.prepare('SELECT accessed_sites FROM runs WHERE id = ?'),
     finish: db.prepare(
       `UPDATE runs SET status = ?, error = ?, exit_code = ?, finished_at = datetime('now'),
                        current_activity = COALESCE(?, current_activity)
@@ -109,6 +121,13 @@ export function createRunStore({ db }) {
     },
 
     saveResult: (runId, text) => statements.saveResult.run(text, runId),
+
+    /** Adds sites the run tried to reach but was not allowed to. Returns the full list. */
+    addBlockedSites: (runId, sites) =>
+      mergeInto(statements.getBlockedSites, statements.setBlockedSites, 'blocked_sites', runId, sites),
+    /** Adds sites the run reached. Returns the full list. */
+    addAccessedSites: (runId, sites) =>
+      mergeInto(statements.getAccessedSites, statements.setAccessedSites, 'accessed_sites', runId, sites),
 
     finish(runId, { status, error = null, exitCode = null }) {
       statements.finish.run(status, error, exitCode, finalActivity(status), runId);

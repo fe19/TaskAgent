@@ -17,6 +17,7 @@ const REFRESH_EVENTS = [
   'settings.updated',
   'assistant.limits',
   'task.rescheduled',
+  'run.blocked_sites',
 ];
 
 function setConnection(name, label) {
